@@ -1,0 +1,143 @@
+.dashboard {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body, sans-serif);
+    scroll-padding-top: 0;
+}
+
+.dash-main {
+    margin-left: 272px;
+    min-width: 0;
+    transition: margin-left 0.25s ease;
+}
+
+/* sidebar collapsed to the icon rail (desktop only) */
+@media (min-width: 901px) {
+    .dashboard.sb-collapsed .dash-main {
+        margin-left: 72px;
+    }
+}
+
+.dash-content {
+    width: 100%;
+    max-width: 100%;
+    padding: 32px 48px 64px;
+    box-sizing: border-box;
+}
+
+.dash-panel {
+    min-height: 360px;
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+    color: var(--text-secondary);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dash-empty-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px 16px;
+}
+
+.dash-empty-icon {
+    color: var(--c, #1F8A70);
+    margin-bottom: 16px;
+    opacity: 0.7;
+}
+
+.dash-empty-title {
+    font-family: var(--font-display, sans-serif);
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text-primary, #1D1D1F);
+    margin: 0 0 8px;
+}
+
+.dash-empty-text {
+    font-size: 13px;
+    color: var(--muted, #7B838B);
+    max-width: 380px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* ---------- Phone hamburger ---------- */
+.dash-topbar {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .dash-main {
+        margin-left: 0;
+    }
+
+    .dash-topbar {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .dash-topbar-title {
+        font-family: var(--font-display, sans-serif);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dash-menu-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--card);
+        color: var(--text);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .dash-menu-btn:focus-visible {
+        outline: 2px solid var(--c);
+        outline-offset: 2px;
+    }
+
+    .dash-menu-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .dash-content {
+        padding: 16px 16px 48px;
+    }
+
+    .dash-panel {
+        padding: 20px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dash-main {
+        transition: none;
+    }
+}
