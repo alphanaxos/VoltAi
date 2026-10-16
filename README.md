@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![VoltAI Banner](public/logo512.png)
+![VoltAI Banner](src/assets/voltai-logo.png)
 
 **Next-Generation Power Grid Operations Desk, AI Load Forecasting & Risk Decision Support System**
 
