@@ -2,77 +2,73 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './Pypsa.css';
 
 /* 
-   Defaults (demo) — reproduce the screenshots.
-   Replace via onSolve() prop.
-    */
+   PyPSA Linear Optimal Power Flow Dispatch Integration
+   API Endpoint: /energy/dispatch
+*/
 
-const FLEET = [
-    { key: 'coal', label: 'Coal (1,500 MW, 40% min stable, ₹3.5/unit)', color: 'var(--c2)' },
-    { key: 'gas', label: 'Gas Peaker (800 MW, ₹6.0/unit)', color: '#E8A33D' },
-    { key: 'solar', label: 'Solar (400 MW nameplate, ₹0.0/unit)', color: '#F4C542' },
-];
+const DIRECT_API_URL = 'https://voltai-backend-w7bt.onrender.com/energy/dispatch';
 
-const FLEET_CAPS = { coal: 1500, gas: 800, solar: 400 };
-
-/* ---------- demo hourly schedule (matches your screenshot) ---------- */
-const DEMAND = [
-    1650, 1580, 1520, 1490, 1510, 1600, 1780, 1950, 2100, 2180, 2260, 2290,
-    2270, 2240, 2180, 2110, 2050, 2140, 2290, 2230, 2140, 1980, 1790, 1720,
-];
-const SOLAR_PROFILE = [0, 0, 0, 0, 0, 0, 45.64, 124.92, 200, 269.61, 332.55, 387.75, 400, 400, 400, 390, 340, 260, 155, 75, 20, 0, 0, 0];
-
-function buildDemoHours() {
-    const start = new Date('2025-01-01T00:00:00');
-    return DEMAND.map((demand_mw, hour) => {
-        const solar_mw = SOLAR_PROFILE[hour];
-        // coal base at 1500 unless load is very low
-        const coal_mw = demand_mw < 1500 ? Math.max(600, demand_mw - solar_mw * 0.6) : 1500;
-        const remaining = Math.max(0, demand_mw - coal_mw - solar_mw);
-        const gas_mw = Math.min(FLEET_CAPS.gas, remaining);
-        const unserved_mw = Math.max(0, demand_mw - coal_mw - solar_mw - gas_mw);
-        const hourly_cost = coal_mw * 3.5 + gas_mw * 6.0;
-        const ts = new Date(start.getTime() + hour * 3600 * 1000);
-        return {
-            hour,
-            timestamp: ts.toISOString().replace('.000Z', ''),
-            demand_mw,
-            coal_mw: Math.round(coal_mw * 100) / 100,
-            gas_mw: Math.round(gas_mw * 100) / 100,
-            solar_mw: Math.round(solar_mw * 100) / 100,
-            unserved_mw: Math.round(unserved_mw * 100) / 100,
-            hourly_cost: Math.round(hourly_cost * 100) / 100,
-        };
-    });
-}
-
-function buildDemoSummary(hours) {
-    const totalCost = hours.reduce((s, h) => s + h.hourly_cost, 0);
-    const totalEnergy = hours.reduce((s, h) => s + h.demand_mw, 0);
-    const peakDemand = Math.max(...hours.map((h) => h.demand_mw));
-    const unserved = hours.reduce((s, h) => s + h.unserved_mw, 0);
-    const totalCoal = hours.reduce((s, h) => s + h.coal_mw, 0);
-    const totalGas = hours.reduce((s, h) => s + h.gas_mw, 0);
-    const totalSolar = hours.reduce((s, h) => s + h.solar_mw, 0);
-    const totalDisp = totalCoal + totalGas + totalSolar;
-    return {
-        totalCost,
-        totalEnergy,
-        peakDemand,
-        unserved,
-        mix: {
-            coal: totalDisp ? (totalCoal / totalDisp) * 100 : 0,
-            gas: totalDisp ? (totalGas / totalDisp) * 100 : 0,
-            solar: totalDisp ? (totalSolar / totalDisp) * 100 : 0,
+const DEFAULT_DISPATCH_PAYLOAD = {
+    demand_mw: [
+        1450, 1420, 1390, 1380, 1400, 1500,
+        1650, 1750, 1800, 1850, 1900, 1950,
+        1980, 2000, 1970, 1930, 1900, 1950,
+        2000, 1980, 1900, 1800, 1650, 1520,
+    ],
+    use_forecast_24h: false,
+    weather_forecasts: [
+        { temperature: 24.0, humidity: 80.0, wind_speed: 8.0, solar_irradiance: 0.0 },
+        { temperature: 23.5, humidity: 82.0, wind_speed: 7.5, solar_irradiance: 0.0 },
+        { temperature: 23.0, humidity: 83.0, wind_speed: 7.0, solar_irradiance: 0.0 },
+        { temperature: 22.5, humidity: 84.0, wind_speed: 6.5, solar_irradiance: 0.0 },
+        { temperature: 22.5, humidity: 82.0, wind_speed: 7.0, solar_irradiance: 0.0 },
+        { temperature: 23.0, humidity: 80.0, wind_speed: 8.0, solar_irradiance: 30.0 },
+        { temperature: 24.0, humidity: 76.0, wind_speed: 9.0, solar_irradiance: 150.0 },
+        { temperature: 25.5, humidity: 72.0, wind_speed: 10.0, solar_irradiance: 320.0 },
+        { temperature: 27.0, humidity: 68.0, wind_speed: 11.0, solar_irradiance: 500.0 },
+        { temperature: 28.5, humidity: 65.0, wind_speed: 12.0, solar_irradiance: 650.0 },
+        { temperature: 30.0, humidity: 60.0, wind_speed: 13.0, solar_irradiance: 780.0 },
+        { temperature: 31.0, humidity: 57.0, wind_speed: 14.0, solar_irradiance: 850.0 },
+        { temperature: 32.0, humidity: 54.0, wind_speed: 15.0, solar_irradiance: 900.0 },
+        { temperature: 33.0, humidity: 50.0, wind_speed: 15.0, solar_irradiance: 920.0 },
+        { temperature: 33.5, humidity: 48.0, wind_speed: 14.0, solar_irradiance: 850.0 },
+        { temperature: 33.0, humidity: 50.0, wind_speed: 13.0, solar_irradiance: 700.0 },
+        { temperature: 32.0, humidity: 53.0, wind_speed: 12.0, solar_irradiance: 500.0 },
+        { temperature: 30.5, humidity: 58.0, wind_speed: 11.0, solar_irradiance: 250.0 },
+        { temperature: 29.0, humidity: 62.0, wind_speed: 10.0, solar_irradiance: 80.0 },
+        { temperature: 28.0, humidity: 65.0, wind_speed: 9.0, solar_irradiance: 0.0 },
+        { temperature: 27.0, humidity: 68.0, wind_speed: 8.5, solar_irradiance: 0.0 },
+        { temperature: 26.0, humidity: 72.0, wind_speed: 8.0, solar_irradiance: 0.0 },
+        { temperature: 25.0, humidity: 76.0, wind_speed: 7.5, solar_irradiance: 0.0 },
+        { temperature: 24.5, humidity: 78.0, wind_speed: 7.0, solar_irradiance: 0.0 },
+    ],
+    calendar_overrides: [
+        {
+            is_weekend: 1,
+            is_holiday: 0,
+            is_festival: 0,
+            is_pre_holiday: 0,
+            is_post_holiday: 0,
+            is_pre_festival: 0,
+            is_post_festival: 0,
+            workday_after_holiday: 0,
         },
-    };
-}
+    ],
+    solar_profile: [
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.03,
+        0.15, 0.32, 0.50, 0.65, 0.78, 0.85,
+        0.90, 0.92, 0.85, 0.70, 0.50, 0.25,
+        0.08, 0.0, 0.0, 0.0, 0.0, 0.0,
+    ],
+    include_load_shedding: false,
+    load_shedding_cost: 100,
+};
 
 /* ---------- helpers ---------- */
 const fmtNum = (n, d = 1) =>
     Number(n).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtInt = (n) => Number(n).toLocaleString('en-IN');
 const fmtINR = (n) => `₹${fmtInt(Math.round(n))}`;
-const pad = (n) => String(n).padStart(2, '0');
 
 /* ---------- icons ---------- */
 function Svg({ children, size = 16, ...rest }) {
@@ -99,12 +95,6 @@ const InfoIcon = () => <Svg size={14}><circle cx="12" cy="12" r="9" /><path d="M
 const CheckIcon = () => <Svg size={16}><path d="M20 6 9 17l-5-5" /></Svg>;
 const MinusIcon = () => <Svg size={14}><path d="M5 12h14" /></Svg>;
 const PlusIcon = () => <Svg size={14}><path d="M12 5v14" /><path d="M5 12h14" /></Svg>;
-const GearIcon = () => (
-    <Svg size={20}>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </Svg>
-);
 
 /* 
    Stacked dispatch bar chart — 24 hours
@@ -291,62 +281,235 @@ function DispatchBarChart({ hours }) {
 /* 
    Donut chart — 24-hour energy generation mix
     */
-function EnergyMixDonut({ mix }) {
-    const R = 78;
-    const r = 48;
-    const cx = 110;
-    const cy = 110;
+function EnergyMixDonut({ summary }) {
+    if (!summary || !summary.mix) return null;
 
-    const segments = [
-        { key: 'coal', label: 'Coal Fleet', value: mix.coal, color: '#7B8CA3' },
-        { key: 'solar', label: 'Solar Farm', value: mix.solar, color: '#F4C542' },
-        { key: 'gas', label: 'Gas Peaker', value: mix.gas, color: '#E8A33D' },
-    ];
+    const mix = summary.mix;
+    const coalPct = Number(mix.coal) || 0;
+    const gasPct = Number(mix.gas) || 0;
+    const solarPct = Number(mix.solar) || 0;
+    const unservedMwh = Number(summary.unserved) || 0;
+    const coalMwh = Number(summary.coalMwh) || 0;
+    const gasMwh = Number(summary.gasMwh) || 0;
+    const solarMwh = Number(summary.solarMwh) || 0;
 
-    // Build SVG path arcs
-    let angle = -Math.PI / 2; // start at top
-    const arcs = segments.map((s) => {
-        const frac = (s.value || 0) / 100;
-        const a0 = angle;
-        const a1 = angle + frac * Math.PI * 2;
-        angle = a1;
-        const large = a1 - a0 > Math.PI ? 1 : 0;
+    const totalMwh = Number(summary.totalEnergy) || (coalMwh + gasMwh + solarMwh) || 1;
+    const unservedPct = totalMwh > 0 && unservedMwh > 0 ? (unservedMwh / totalMwh) * 100 : 0;
 
-        const x0o = cx + R * Math.cos(a0), y0o = cy + R * Math.sin(a0);
-        const x1o = cx + R * Math.cos(a1), y1o = cy + R * Math.sin(a1);
-        const x0i = cx + r * Math.cos(a0), y0i = cy + r * Math.sin(a0);
-        const x1i = cx + r * Math.cos(a1), y1i = cy + r * Math.sin(a1);
-        const d = `M${x0o} ${y0o} A${R} ${R} 0 ${large} 1 ${x1o} ${y1o} L${x1i} ${y1i} A${r} ${r} 0 ${large} 0 ${x0i} ${y0i} Z`;
+    const gwhTotal = (totalMwh / 1000).toFixed(1);
+    const renewablePct = solarPct.toFixed(1);
 
-        // label anchor at mid-angle, offset outward
-        const am = (a0 + a1) / 2;
-        const lx = cx + ((R + r) / 2) * Math.cos(am);
-        const ly = cy + ((R + r) / 2) * Math.sin(am);
+    // SVG Geometry: Center at 280, 140. Radius = 80. Circumference = 2 * PI * 80 ≈ 502.65
+    const C = 502.655;
+    const cx = 280;
+    const cy = 140;
+    const R = 80;
 
-        return { ...s, d, lx, ly, pct: s.value };
+    // Slices ordered clockwise from top: Gas Peaker (top), Coal Fleet (right/bottom), Solar Farm (left)
+    const gasLen = Math.max(0, (gasPct / 100) * C);
+    const coalLen = Math.max(0, (coalPct / 100) * C);
+    const solarLen = Math.max(0, (solarPct / 100) * C);
+
+    const gasOffset = 0;
+    const coalOffset = -gasLen;
+    const solarOffset = -(gasLen + coalLen);
+
+    // Dynamic midpoint angles
+    const gasAngle = -Math.PI / 2 + ((gasLen / 2) / C) * Math.PI * 2;
+    const coalAngle = -Math.PI / 2 + ((gasLen + coalLen / 2) / C) * Math.PI * 2;
+    const solarAngle = -Math.PI / 2 + ((gasLen + coalLen + solarLen / 2) / C) * Math.PI * 2;
+
+    const ptOnRing = (angle) => ({
+        x: Number((cx + R * Math.cos(angle)).toFixed(1)),
+        y: Number((cy + R * Math.sin(angle)).toFixed(1)),
     });
 
+    const gasPt = ptOnRing(gasAngle);
+    // Anchor Coal leader line cleanly on the right arc
+    const coalAnchorAngle = Math.min(Math.max(coalAngle, -0.1), Math.PI * 0.45);
+    const coalPt = ptOnRing(coalAnchorAngle);
+    const solarPt = ptOnRing(solarAngle);
+
     return (
-        <div className="py-donut">
-            <svg viewBox="0 0 220 220" role="img" aria-label="24-hour energy generation mix donut chart">
-                {arcs.map((a) => (
-                    <path key={a.key} d={a.d} fill={a.color} stroke="var(--card)" strokeWidth="1" />
-                ))}
-                {arcs.map((a) => (
-                    a.pct > 5 && (
-                        <text key={`l-${a.key}`} className="py-donut-label" x={a.lx} y={a.ly + 3} textAnchor="middle">
-                            {a.label}
-                        </text>
-                    )
-                ))}
-                {arcs.map((a) => (
-                    a.pct > 5 && (
-                        <text key={`p-${a.key}`} className="py-donut-pct" x={a.lx} y={a.ly + 15} textAnchor="middle">
-                            {a.pct.toFixed(1)}%
-                        </text>
-                    )
-                ))}
+        <div className="py-em-shell">
+            {/* Header bar matching Feature.jsx */}
+            <div className="py-em-header">
+                <div className="py-em-header-left">
+                    <span className="py-em-dot"></span>
+                    <span className="py-em-title">24-HOUR ENERGY MIX</span>
+                </div>
+                <div className="py-em-stats">
+                    <span className="py-em-stat-item">
+                        <span className="py-em-stat-val">{gwhTotal}</span> GWh TOTAL
+                    </span>
+                    <span className="py-em-stat-divider"></span>
+                    <span className="py-em-stat-item">
+                        <span className="py-em-stat-val">{renewablePct}</span>% RENEWABLE
+                    </span>
+                </div>
+            </div>
+
+            {/* SVG Pie Chart Canvas */}
+            <svg className="py-em-svg" viewBox="0 0 560 280" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                    <filter id="glowMixPypsa">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                    </filter>
+                </defs>
+
+                {/* Background Ring */}
+                <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(125, 140, 160, 0.15)" strokeWidth="30" />
+
+                {/* Slices */}
+                <g transform={`rotate(-90 ${cx} ${cy})`}>
+                    {gasPct > 0 && (
+                        <circle
+                            cx={cx}
+                            cy={cy}
+                            r={R}
+                            fill="none"
+                            stroke="#F97316"
+                            strokeWidth="30"
+                            strokeDasharray={`${gasLen.toFixed(1)} ${C.toFixed(1)}`}
+                            strokeDashoffset={gasOffset.toFixed(1)}
+                            className="py-em-slice"
+                        />
+                    )}
+                    {coalPct > 0 && (
+                        <circle
+                            cx={cx}
+                            cy={cy}
+                            r={R}
+                            fill="none"
+                            stroke="#64748B"
+                            strokeWidth="30"
+                            strokeDasharray={`${coalLen.toFixed(1)} ${C.toFixed(1)}`}
+                            strokeDashoffset={coalOffset.toFixed(1)}
+                            className="py-em-slice"
+                        />
+                    )}
+                    {solarPct > 0 && (
+                        <circle
+                            cx={cx}
+                            cy={cy}
+                            r={R}
+                            fill="none"
+                            stroke="#F4C86A"
+                            strokeWidth="30"
+                            strokeDasharray={`${solarLen.toFixed(1)} ${C.toFixed(1)}`}
+                            strokeDashoffset={solarOffset.toFixed(1)}
+                            className="py-em-slice"
+                        />
+                    )}
+                </g>
+
+                {/* Center Label */}
+                <text x={cx} y={cy - 4} className="py-em-center-val" textAnchor="middle">
+                    {gwhTotal}
+                </text>
+                <text x={cx} y={cy + 16} className="py-em-center-unit" textAnchor="middle">
+                    GWh TOTAL
+                </text>
+
+                {/* Pointers and Labels */}
+                <g className="py-em-labels">
+                    {/* Right side — Gas Peaker (top) */}
+                    {gasPct > 0 && (
+                        <g className="py-em-label-group">
+                            <polyline
+                                points={`${gasPt.x},${gasPt.y} 390,52 440,52`}
+                                fill="none"
+                                stroke="rgba(125, 140, 160, 0.3)"
+                                strokeWidth="1"
+                            />
+                            <circle cx={gasPt.x} cy={gasPt.y} r="3.5" fill="#F97316" />
+                            <text x="440" y="44" className="py-em-name gas" textAnchor="start">
+                                GAS PEAKER
+                            </text>
+                            <text x="440" y="64" className="py-em-val" textAnchor="start">
+                                {fmtNum(gasMwh, 0)} MWh{' '}
+                                <tspan className="py-em-pct">({gasPct.toFixed(1)}%)</tspan>
+                            </text>
+                        </g>
+                    )}
+
+                    {/* Right side — Coal Fleet (middle/lower) */}
+                    {coalPct > 0 && (
+                        <g className="py-em-label-group">
+                            <polyline
+                                points={`${coalPt.x},${coalPt.y} 390,140 440,140`}
+                                fill="none"
+                                stroke="rgba(125, 140, 160, 0.3)"
+                                strokeWidth="1"
+                            />
+                            <circle cx={coalPt.x} cy={coalPt.y} r="3.5" fill="#64748B" />
+                            <text x="440" y="132" className="py-em-name coal" textAnchor="start">
+                                COAL FLEET
+                            </text>
+                            <text x="440" y="152" className="py-em-val" textAnchor="start">
+                                {fmtNum(coalMwh, 0)} MWh{' '}
+                                <tspan className="py-em-pct">({coalPct.toFixed(1)}%)</tspan>
+                            </text>
+                        </g>
+                    )}
+
+                    {/* Left side — Solar Farm */}
+                    {solarPct > 0 && (
+                        <g className="py-em-label-group">
+                            <polyline
+                                points={`${solarPt.x},${solarPt.y} 170,110 120,110`}
+                                fill="none"
+                                stroke="rgba(125, 140, 160, 0.3)"
+                                strokeWidth="1"
+                            />
+                            <circle cx={solarPt.x} cy={solarPt.y} r="3.5" fill="#F4C86A" />
+                            <text x="120" y="102" className="py-em-name solar" textAnchor="end">
+                                SOLAR FARM
+                            </text>
+                            <text x="120" y="122" className="py-em-val" textAnchor="end">
+                                <tspan className="py-em-pct">({solarPct.toFixed(1)}%) </tspan>
+                                {fmtNum(solarMwh, 0)} MWh
+                            </text>
+                        </g>
+                    )}
+                </g>
             </svg>
+
+            {/* Bottom status row */}
+            <div className="py-em-footer">
+                {coalPct > 0 && (
+                    <div className="py-em-source">
+                        <span className="py-em-dot-pill" style={{ background: '#64748B' }}></span>
+                        <span>Coal Fleet</span>
+                        <strong>{coalPct.toFixed(1)}%</strong>
+                    </div>
+                )}
+                {gasPct > 0 && (
+                    <div className="py-em-source">
+                        <span className="py-em-dot-pill" style={{ background: '#F97316' }}></span>
+                        <span>Gas Peaker</span>
+                        <strong>{gasPct.toFixed(1)}%</strong>
+                    </div>
+                )}
+                {solarPct > 0 && (
+                    <div className="py-em-source">
+                        <span className="py-em-dot-pill" style={{ background: '#F4C86A' }}></span>
+                        <span>Solar Farm</span>
+                        <strong>{solarPct.toFixed(1)}%</strong>
+                    </div>
+                )}
+                {unservedPct > 0 && (
+                    <div className="py-em-source">
+                        <span className="py-em-dot-pill" style={{ background: '#EF4444' }}></span>
+                        <span>Unserved Load</span>
+                        <strong>{unservedPct.toFixed(1)}%</strong>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -375,24 +538,6 @@ function BarLegend() {
     );
 }
 
-function DonutLegend({ mix }) {
-    const items = [
-        { label: 'Coal Fleet', value: mix.coal, color: '#7B8CA3' },
-        { label: 'Solar Farm', value: mix.solar, color: '#F4C542' },
-        { label: 'Gas Peaker', value: mix.gas, color: '#E8A33D' },
-    ];
-    return (
-        <ul className="py-donut-legend">
-            {items.map((it) => (
-                <li key={it.label}>
-                    <span className="py-legend-swatch" style={{ background: it.color }} />
-                    <span className="py-donut-legend-label">{it.label}</span>
-                    <span className="py-donut-legend-pct">{it.value.toFixed(1)}%</span>
-                </li>
-            ))}
-        </ul>
-    );
-}
 
 /* 
    Main component
@@ -400,7 +545,7 @@ function DonutLegend({ mix }) {
 function Pypsa({ onSolve }) {
     /* --- optimization config --- */
     const [useExplicit, setUseExplicit] = useState(true);
-    const [includeLoadShedding, setIncludeLoadShedding] = useState(true);
+    const [includeLoadShedding, setIncludeLoadShedding] = useState(false);
     const [loadSheddingPenalty, setLoadSheddingPenalty] = useState(100);
     const [panelOpen, setPanelOpen] = useState(true);
 
@@ -408,32 +553,161 @@ function Pypsa({ onSolve }) {
     const [hours, setHours] = useState(null);
     const [summary, setSummary] = useState(null);
     const [status, setStatus] = useState(null); // 'optimal' | 'infeasible' | null
+    const [provenanceNote, setProvenanceNote] = useState(null);
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const popoverRef = useRef(null);
     const [solving, setSolving] = useState(false);
     const [error, setError] = useState(null);
 
-    /* --- run solver --- */
+    const closePopover = (e) => {
+        if (e) {
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+            if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        }
+        setPopoverOpen(false);
+        if (typeof document !== 'undefined' && document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+    };
+
+    /* close popover on outside click/tap on mobile and desktop */
+    useEffect(() => {
+        if (!popoverOpen) return;
+        const handleOutside = (e) => {
+            if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+                setPopoverOpen(false);
+            }
+        };
+        document.addEventListener('pointerdown', handleOutside);
+        return () => document.removeEventListener('pointerdown', handleOutside);
+    }, [popoverOpen]);
+
+    /* --- run solver (live API integration) --- */
     const handleSolve = async () => {
         setError(null);
         setSolving(true);
         try {
-            let result;
-            if (onSolve) {
-                result = await onSolve({
-                    demandSource: useExplicit ? 'explicit_profile' : 'phase4_recursive',
-                    includeLoadShedding,
-                    loadSheddingPenalty: Number(loadSheddingPenalty),
-                });
+            // Build strictly validated payload depending on source choice
+            const requestPayload = {
+                include_load_shedding: Boolean(includeLoadShedding),
+                load_shedding_cost: Number(loadSheddingPenalty) || 100,
+                solar_profile: DEFAULT_DISPATCH_PAYLOAD.solar_profile,
+            };
+
+            if (useExplicit) {
+                // Choice 1: Explicit 24-hour demand profile
+                requestPayload.demand_mw = DEFAULT_DISPATCH_PAYLOAD.demand_mw;
+                requestPayload.use_forecast_24h = false;
             } else {
-                // demo fallback
-                await new Promise((r) => setTimeout(r, 400));
-                const h = buildDemoHours();
-                result = { status: 'optimal', hours: h, summary: buildDemoSummary(h) };
+                // Choice 2: Phase 4 24h recursive forecast (demand_mw MUST be omitted)
+                requestPayload.use_forecast_24h = true;
+                requestPayload.weather_forecasts = DEFAULT_DISPATCH_PAYLOAD.weather_forecasts;
+                requestPayload.calendar_overrides = Array(24).fill(DEFAULT_DISPATCH_PAYLOAD.calendar_overrides[0]);
             }
-            setHours(result.hours);
-            setSummary(result.summary);
-            setStatus(result.status || 'optimal');
+
+            let data;
+            if (onSolve) {
+                data = await onSolve(requestPayload);
+            } else {
+                let response;
+
+                // 1. Try local dev server proxy first (/energy/dispatch) to bypass CORS on mobile
+                try {
+                    const proxyRes = await fetch('/energy/dispatch', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestPayload),
+                    });
+                    const ct = proxyRes.headers.get('content-type') || '';
+                    // If proxy answered with JSON (whether 200 or 400), use proxyRes directly
+                    if (ct.includes('application/json')) {
+                        response = proxyRes;
+                    }
+                } catch {
+                    /* fallback to direct API only if proxy endpoint was completely unreachable */
+                }
+
+                // 2. Direct API call if proxy is not available
+                if (!response) {
+                    response = await fetch(DIRECT_API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'accept': '*/*',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestPayload),
+                    });
+                }
+
+                if (!response.ok) {
+                    let errMsg = `Dispatch solver error (${response.status})`;
+                    try {
+                        const errJson = await response.json();
+                        errMsg = errJson.detail || errJson.message || JSON.stringify(errJson);
+                    } catch {
+                        const errText = await response.text();
+                        if (errText) errMsg += `: ${errText}`;
+                    }
+                    throw new Error(errMsg);
+                }
+
+                data = await response.json();
+            }
+
+            const schedule = (data?.hourly_schedule || []).map((h) => ({
+                hour: h.hour,
+                timestamp: h.timestamp || '',
+                demand_mw: Number(h.demand_mw) || 0,
+                coal_mw: Math.max(0, Number(h.coal_mw) || 0),
+                gas_mw: Math.max(0, Number(h.gas_mw) || 0),
+                solar_mw: Math.max(0, Number(h.solar_mw) || 0),
+                unserved_mw: Math.max(0, Number(h.unserved_mw) || 0),
+                hourly_cost: Number(h.hourly_cost) || 0,
+            }));
+
+            const coalMwh = Number(data?.coal_total_mwh) || schedule.reduce((sum, h) => sum + h.coal_mw, 0);
+            const gasMwh = Number(data?.gas_total_mwh) || schedule.reduce((sum, h) => sum + h.gas_mw, 0);
+            const solarMwh = Number(data?.solar_total_mwh) || schedule.reduce((sum, h) => sum + h.solar_mw, 0);
+            const unservedMwh = Number(data?.unserved_energy_mwh) || schedule.reduce((sum, h) => sum + h.unserved_mw, 0);
+            const totalDisp = coalMwh + gasMwh + solarMwh;
+            const totalMwh = Number(data?.total_demand_mwh) || totalDisp || 1;
+
+            const summ = {
+                totalCost: Number(data?.total_cost) || 0,
+                totalEnergy: totalMwh,
+                peakDemand: Number(data?.peak_demand_mw) || 0,
+                unserved: unservedMwh,
+                coalMwh,
+                gasMwh,
+                solarMwh,
+                mix: {
+                    coal: data?.coal_share_pct !== undefined ? Number(data.coal_share_pct) : (totalDisp ? (coalMwh / totalDisp) * 100 : 0),
+                    gas: data?.gas_share_pct !== undefined ? Number(data.gas_share_pct) : (totalDisp ? (gasMwh / totalDisp) * 100 : 0),
+                    solar: data?.solar_share_pct !== undefined ? Number(data.solar_share_pct) : (totalDisp ? (solarMwh / totalDisp) * 100 : 0),
+                },
+                solverUsed: data?.solver_used || 'PyPSA / HiGHS',
+            };
+
+            setHours(schedule);
+            setSummary(summ);
+            setStatus(data?.optimization_status || (data?.is_optimal ? 'optimal' : 'feasible'));
+            setProvenanceNote(data?.provenance_note || '');
         } catch (err) {
-            setError((err && err.message) || 'Solver failed. Please try again.');
+            const isCorsError =
+                err?.name === 'TypeError' &&
+                (err?.message === 'Load failed' ||
+                    err?.message?.includes('Failed to fetch') ||
+                    err?.message?.includes('NetworkError'));
+
+            if (isCorsError) {
+                setError(
+                    'Network error connecting to backend. If accessing from phone on LAN (172.20.10.2:3000), please ensure your dev server is active and reachable.'
+                );
+            } else {
+                setError((err && err.message) || 'Dispatch solver failed. Please try again.');
+            }
             setStatus(null);
         } finally {
             setSolving(false);
@@ -527,9 +801,23 @@ function Pypsa({ onSolve }) {
             {/* ============ SOLVE BUTTON ============ */}
             <div className="py-actions">
                 <button type="button" className="py-btn primary" onClick={handleSolve} disabled={solving}>
-                    <BoltIcon />
-                    {solving ? 'Solving…' : 'Solve Dispatch Optimization'}
+                    {solving ? (
+                        <>
+                            <span className="py-spinner" aria-hidden="true" />
+                            Solving Dispatch…
+                        </>
+                    ) : (
+                        <>
+                            <BoltIcon />
+                            Solve Dispatch Optimization
+                        </>
+                    )}
                 </button>
+                {status && (
+                    <span className="py-status-badge optimal">
+                        <CheckIcon /> {status.toUpperCase()}
+                    </span>
+                )}
                 {error && <span className="py-msg error">{error}</span>}
             </div>
 
@@ -571,16 +859,72 @@ function Pypsa({ onSolve }) {
                 <section className="py-charts-row">
                     <div className="py-card py-chart-card">
                         <div className="py-chart-head">
-                            <h2 className="py-card-title">24-Hour Economic Generation Dispatch Schedule</h2>
+                            <div className="py-chart-title-wrap">
+                                <h2 className="py-card-title">24-Hour Economic Generation Dispatch Schedule</h2>
+                                {provenanceNote && (
+                                    <div
+                                        ref={popoverRef}
+                                        className={`py-provenance-tooltip-wrap ${popoverOpen ? 'open' : ''}`}
+                                        onMouseEnter={() => {
+                                            if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+                                                setPopoverOpen(true);
+                                            }
+                                        }}
+                                        onMouseLeave={() => {
+                                            if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+                                                setPopoverOpen(false);
+                                            }
+                                        }}
+                                    >
+                                        <button
+                                            type="button"
+                                            className="py-help-btn"
+                                            aria-label="View dispatch provenance notes"
+                                            aria-expanded={popoverOpen}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setPopoverOpen((o) => !o);
+                                            }}
+                                        >
+                                            ?
+                                        </button>
+                                        {popoverOpen && (
+                                            <div
+                                                className="py-provenance-popover open"
+                                                role="tooltip"
+                                                onClick={(e) => e.stopPropagation()}
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                            >
+                                                <div className="py-popover-head">
+                                                    <div className="py-popover-title">Model Provenance & Fleet Config</div>
+                                                    <button
+                                                        type="button"
+                                                        className="py-popover-close"
+                                                        aria-label="Close notes"
+                                                        onClick={closePopover}
+                                                        onPointerDown={(e) => {
+                                                            e.stopPropagation();
+                                                        }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                            <line x1="3" y1="3" x2="11" y2="11" />
+                                                            <line x1="11" y1="3" x2="3" y2="11" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <div className="py-popover-desc">{provenanceNote}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                             <BarLegend />
                         </div>
                         <DispatchBarChart hours={hours} />
                     </div>
 
                     <div className="py-card py-donut-card">
-                        <h2 className="py-card-title">24-Hour Energy Generation Mix (MWh)</h2>
-                        <EnergyMixDonut mix={summary.mix} />
-                        <DonutLegend mix={summary.mix} />
+                        <EnergyMixDonut summary={summary} />
                     </div>
                 </section>
             )}
@@ -593,21 +937,21 @@ function Pypsa({ onSolve }) {
                         <table className="py-table">
                             <thead>
                                 <tr>
-                                    <th>hour</th>
-                                    <th>timestamp</th>
-                                    <th>demand_mw</th>
-                                    <th>coal_mw</th>
-                                    <th>gas_mw</th>
-                                    <th>solar_mw</th>
-                                    <th>unserved_mw</th>
-                                    <th>hourly_cost</th>
+                                    <th className="cell-hour">Hour</th>
+                                    <th className="cell-ts">Timestamp</th>
+                                    <th className="num">Demand (MW)</th>
+                                    <th className="num">Coal (MW)</th>
+                                    <th className="num">Gas (MW)</th>
+                                    <th className="num">Solar (MW)</th>
+                                    <th className="num">Unserved (MW)</th>
+                                    <th className="num">Hourly Cost (₹)</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {hours.map((h) => (
                                     <tr key={h.hour}>
-                                        <td>{h.hour}</td>
-                                        <td className="mono">{h.timestamp}</td>
+                                        <td className="cell-hour">{h.hour}</td>
+                                        <td className="mono cell-ts">{h.timestamp}</td>
                                         <td className="num">{fmtNum(h.demand_mw, 1)}</td>
                                         <td className="num">{fmtNum(h.coal_mw, 1)}</td>
                                         <td className="num">{fmtNum(h.gas_mw, 1)}</td>

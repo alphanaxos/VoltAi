@@ -7,17 +7,50 @@ import './Analysis.css';
    ===================================================================== */
 const SCENARIOS = [
     { key: 'Normal', label: 'Normal', desc: 'Baseline operational feature vector without modification.' },
-    { key: 'Night Peak (22:00)', label: 'Night Peak (22:00)', desc: 'Fourier hour harmonics adjusted to 22:00 (hour_sin=sin(2π·22/24), hour_cos=cos(2π·22/24)).' },
+    { key: 'Night Peak (22:00)', label: 'Night Peak (22:00)', desc: 'Fourier hour harmonics adjusted to 22:00 (hour_sin = sin(2π·22/24), hour_cos = cos(2π·22/24)).' },
     { key: 'Heatwave (+5°C)', label: 'Heatwave (+5°C)', desc: 'Temperature increased by 5°C with updated temp_x_hour_sin interaction.' },
     { key: 'Festival Load', label: 'Festival Load', desc: 'is_festival flag set to 1.' },
     { key: 'Rainy Day', label: 'Rainy Day', desc: 'Humidity increased by 20% and solar_irradiance attenuated by 70% (multiplied by 0.3).' },
 ];
 
 const DEFAULT_BASELINE = {
-    temperatureC: 24.5,
-    humidityPct: 62.0,
-    priorLag1Mw: 2165.26,
+    temperatureC: 28.5,
+    humidityPct: 65.0,
+    priorLag1Mw: 125.5,
 };
+
+const STATIC_FEATURES = {
+    is_weekend: 1,
+    is_holiday: 0,
+    is_festival: 0,
+    is_pre_holiday: 0,
+    is_post_holiday: 0,
+    is_pre_festival: 0,
+    is_post_festival: 0,
+    workday_after_holiday: 0,
+    temperature: 28.5,
+    humidity: 65.0,
+    wind_speed: 12.0,
+    solar_irradiance: 650.0,
+    lag_1: 125.5,
+    lag_24: 118.2,
+    lag_48: 121.7,
+    lag_72: 115.4,
+    lag_168: 120.1,
+    rolling_mean_24: 122.3,
+    rolling_std_24: 8.6,
+    rolling_max_24: 140.5,
+    rolling_min_24: 105.2,
+    hour_sin: 0.866025,
+    hour_cos: -0.5,
+    day_sin: 0.974928,
+    day_cos: -0.222521,
+    month_sin: 0.5,
+    month_cos: 0.866025,
+    temp_x_hour_sin: 24.681713,
+};
+
+const DIRECT_API_URL = 'https://voltai-backend-w7bt.onrender.com/predict/scenario';
 
 /* ---------- small icons (kept consistent with System Overview) ---------- */
 function Svg({ children, size = 16, ...rest }) {
@@ -48,8 +81,8 @@ const MinusIcon = () => <Svg size={14}><path d="M5 12h14" /></Svg>;
 /* ---------- helpers ---------- */
 const fmtNum = (n, d = 2) =>
     Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-const fmtSigned = (n, d = 1) => `${n >= 0 ? '+' : ''}${fmtNum(n, d)}`;
-const fmtPct = (n, d = 2) => `${n >= 0 ? '+' : ''}${fmtNum(n, d)}%`;
+const fmtSigned = (n, d = 1) => `${n > 0 ? '+' : ''}${fmtNum(n, d)}`;
+const fmtPct = (n, d = 2) => `${n > 0 ? '+' : ''}${fmtNum(n, d)}%`;
 
 /* Multi-select dropdown for "Scenarios to Evaluate" */
 function ScenarioMultiSelect({ options, value, onChange }) {
@@ -226,7 +259,6 @@ function ScenarioBarChart({ rows, baselineMw }) {
         const ih = h - m.top - m.bottom;
 
         const maxVal = Math.max(baselineMw, ...rows.map((r) => r.predictedMw));
-        const minVal = Math.min(baselineMw, ...rows.map((r) => r.predictedMw));
         // pad top so the labels have room
         const top = Math.ceil((maxVal * 1.08) / 100) * 100;
         const bottom = 0;
@@ -260,13 +292,15 @@ function ScenarioBarChart({ rows, baselineMw }) {
                     ))}
 
                     {/* baseline dashed reference line */}
-                    <line
-                        className="an-baseline"
-                        x1={geo.m.left}
-                        x2={size.w - geo.m.right}
-                        y1={geo.y(baselineMw)}
-                        y2={geo.y(baselineMw)}
-                    />
+                    {baselineMw > 0 && (
+                        <line
+                            className="an-baseline"
+                            x1={geo.m.left}
+                            x2={size.w - geo.m.right}
+                            y1={geo.y(baselineMw)}
+                            y2={geo.y(baselineMw)}
+                        />
+                    )}
 
                     {rows.map((r, i) => {
                         const bx = geo.x(i) - geo.barW / 2;
@@ -337,82 +371,135 @@ function Analysis({ onRunStressTest }) {
     const [baseline, setBaseline] = useState(DEFAULT_BASELINE);
     const [selected, setSelected] = useState(SCENARIOS.map((s) => s.key));
     const [rows, setRows] = useState(null);
+    const [baselineMw, setBaselineMw] = useState(0);
+    const [modelUsed, setModelUsed] = useState(null);
     const [running, setRunning] = useState(false);
     const [error, setError] = useState(null);
 
-    const baselineMw = rows ? rows[0].predictedMw : 0;
-
-    /* ---------- run stress test (backend hook) ---------- */
+    /* ---------- run stress test (live API integration) ---------- */
     const runStressTest = async () => {
+        if (!selected || selected.length === 0) {
+            setError('Please select at least one scenario to evaluate.');
+            return;
+        }
+
         setError(null);
         setRunning(true);
         try {
-            // --- Backend contract (unchanged shape) ---
-            //  onRunStressTest({ baseline, scenarios }) -> Promise<Array<{scenario, predicted_mw}>>
-            let result;
+            const tempVal = Number(baseline.temperatureC) || 0;
+            const humVal = Number(baseline.humidityPct) || 0;
+            const lagVal = Number(baseline.priorLag1Mw) || 0;
 
+            const requestPayload = {
+                features: {
+                    ...STATIC_FEATURES,
+                    temperature: tempVal,
+                    humidity: humVal,
+                    lag_1: lagVal,
+                    temp_x_hour_sin: Number((tempVal * 0.866025).toFixed(6)),
+                },
+                scenarios: selected,
+            };
+
+            let data;
             if (onRunStressTest) {
-                result = await onRunStressTest({
-                    baseline: {
-                        temperatureC: Number(baseline.temperatureC),
-                        humidityPct: Number(baseline.humidityPct),
-                        priorLag1Mw: Number(baseline.priorLag1Mw),
-                    },
-                    scenarios: selected,
-                });
+                data = await onRunStressTest(requestPayload);
             } else {
-                // --- Offline demo fallback so the page still works ---
-                const base = Number(baseline.priorLag1Mw) || 2165;
-                const bumps = {
-                    'Normal': 0,
-                    'Night Peak (22:00)': 0.1,
-                    'Heatwave (+5°C)': 63.3,
-                    'Festival Load': 67.5,
-                    'Rainy Day': 14.8,
-                };
-                result = selected.map((k) => ({
-                    scenario: k,
-                    predicted_mw: Math.round((base + (bumps[k] ?? 0)) * 10) / 10,
-                }));
-                // small artificial delay so the spinner is visible
-                await new Promise((r) => setTimeout(r, 400));
+                let response;
+
+                // 1. Try dev server proxy first (/predict/scenario)
+                // This bypasses CORS completely when accessing from phone/LAN (e.g. 172.20.10.2:3000)
+                try {
+                    const proxyRes = await fetch('/predict/scenario', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestPayload),
+                    });
+                    const ct = proxyRes.headers.get('content-type') || '';
+                    if (proxyRes.ok && ct.includes('application/json')) {
+                        response = proxyRes;
+                    }
+                } catch {
+                    /* fallback to direct API */
+                }
+
+                // 2. Direct API call if proxy is not available
+                if (!response) {
+                    response = await fetch(DIRECT_API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'accept': '*/*',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestPayload),
+                    });
+                }
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`API request failed (${response.status}): ${errText || response.statusText}`);
+                }
+
+                data = await response.json();
             }
 
+            const resultsList = Array.isArray(data) ? data : (data?.results || []);
+            const baseLoad = Number(data?.baseline_load_mw) || (resultsList.find((r) => (r.scenario_name || r.scenario) === 'Normal')?.predicted_load_mw) || (resultsList[0]?.predicted_load_mw ?? 0);
+
             // Normalize to rows the UI understands
-            const normalized = result.map((r) => {
-                const meta = SCENARIOS.find((s) => s.key === (r.scenario ?? r.key ?? r.label));
+            const normalized = resultsList.map((r) => {
+                const sName = r.scenario_name ?? r.scenario ?? r.key ?? r.label;
+                const meta = SCENARIOS.find((s) => s.key === sName);
+                const predMw = Number(r.predicted_load_mw ?? r.predicted_mw ?? r.predictedMw ?? r.value ?? 0);
+                const deltaMw = r.delta_mw !== undefined ? Number(r.delta_mw) : (predMw - baseLoad);
+                const pctChange = r.pct_change !== undefined ? Number(r.pct_change) : (baseLoad ? (deltaMw / baseLoad) * 100 : 0);
+
                 return {
-                    key: meta?.key ?? r.scenario ?? r.key ?? r.label,
-                    label: meta?.label ?? r.scenario ?? r.label,
-                    desc: meta?.desc ?? r.description ?? '',
-                    predictedMw: Number(r.predicted_mw ?? r.predictedMw ?? r.value ?? 0),
+                    key: meta?.key ?? sName,
+                    label: meta?.label ?? sName,
+                    desc: r.description ?? meta?.desc ?? '',
+                    predictedMw: predMw,
+                    deltaMw,
+                    pctChange,
                 };
             });
 
             setRows(normalized);
+            setBaselineMw(baseLoad);
+            if (data?.model_used) {
+                setModelUsed(data.model_used);
+            }
         } catch (err) {
-            setError((err && err.message) || 'Stress test failed. Please try again.');
+            const isCorsError =
+                err?.name === 'TypeError' &&
+                (err?.message === 'Load failed' ||
+                    err?.message?.includes('Failed to fetch') ||
+                    err?.message?.includes('NetworkError'));
+
+            if (isCorsError) {
+                setError(
+                    'CORS Error (Load failed): Phone origin (172.20.10.2:3000) is blocked by Render backend. Please set CORS_ORIGINS=* in your Render dashboard environment variables, or restart your frontend terminal (`npm start`) so the local proxy takes effect.'
+                );
+            } else {
+                setError((err && err.message) || 'Stress test failed. Please try again.');
+            }
         } finally {
             setRunning(false);
         }
     };
 
-    /* ---------- impact summary rows (baseline = Normal) ---------- */
+    /* ---------- impact summary rows ---------- */
     const summaryRows = useMemo(() => {
         if (!rows || !rows.length) return [];
-        const norm = rows.find((r) => r.key === 'Normal') ?? rows[0];
-        const baseMw = norm.predictedMw;
-        return rows.map((r) => {
-            const delta = r.predictedMw - baseMw;
-            const pct = baseMw ? (delta / baseMw) * 100 : 0;
-            return {
-                scenario_name: r.label,
-                predicted_mw: r.predictedMw,
-                delta_mw: delta,
-                change_pct: pct,
-                description: r.desc,
-            };
-        });
+        return rows.map((r) => ({
+            scenario_name: r.label,
+            predicted_mw: r.predictedMw,
+            delta_mw: r.deltaMw,
+            change_pct: r.pctChange,
+            description: r.desc,
+        }));
     }, [rows]);
 
     return (
@@ -440,7 +527,7 @@ function Analysis({ onRunStressTest }) {
                         <NumberStepper
                             label="Prior Hour Demand Lag_1 (MW)"
                             value={baseline.priorLag1Mw}
-                            step={10}
+                            step={5}
                             onChange={(v) => setBaseline((b) => ({ ...b, priorLag1Mw: v }))}
                         />
 
@@ -455,8 +542,17 @@ function Analysis({ onRunStressTest }) {
                             onClick={runStressTest}
                             disabled={running || selected.length === 0}
                         >
-                            <BoltIcon />
-                            {running ? 'Running…' : 'Run Scenario Stress Test'}
+                            {running ? (
+                                <>
+                                    <span className="an-spinner" aria-hidden="true" />
+                                    Running…
+                                </>
+                            ) : (
+                                <>
+                                    <BoltIcon />
+                                    Run Scenario Stress Test
+                                </>
+                            )}
                         </button>
 
                         {error && <p className="an-msg error">{error}</p>}
@@ -465,8 +561,24 @@ function Analysis({ onRunStressTest }) {
 
                 {/* --- Stress test outcomes --- */}
                 <div className="an-card an-outcomes-card">
-                    <h2 className="an-card-title">Stress Test Outcomes</h2>
-                    <p className="an-card-sub">Scenario Stress Testing Forecast Comparison</p>
+                    <div className="an-outcomes-header">
+                        <div>
+                            <h2 className="an-card-title">Stress Test Outcomes</h2>
+                            <p className="an-card-sub">Scenario Stress Testing Forecast Comparison</p>
+                        </div>
+                        {rows && rows.length > 0 && (
+                            <div className="an-outcomes-meta">
+                                {modelUsed && (
+                                    <span className="an-badge model">
+                                        <BoltIcon /> {modelUsed}
+                                    </span>
+                                )}
+                                <span className="an-badge baseline">
+                                    Baseline: <strong>{fmtNum(baselineMw, 2)} MW</strong>
+                                </span>
+                            </div>
+                        )}
+                    </div>
                     {rows && rows.length > 0 ? (
                         <ScenarioBarChart rows={rows} baselineMw={baselineMw} />
                     ) : (
@@ -482,7 +594,17 @@ function Analysis({ onRunStressTest }) {
 
             {/* ============ Scenario Impact Summary ============ */}
             <section className="an-card an-summary-card">
-                <h2 className="an-card-title">Scenario Impact Summary</h2>
+                <div className="an-summary-head">
+                    <div>
+                        <h2 className="an-card-title">Scenario Impact Summary</h2>
+                        <p className="an-card-sub">Quantitative delta compared to operational baseline</p>
+                    </div>
+                    {summaryRows.length > 0 && (
+                        <span className="an-badge baseline">
+                            Evaluated: <strong>{summaryRows.length} scenario{summaryRows.length > 1 ? 's' : ''}</strong>
+                        </span>
+                    )}
+                </div>
                 {summaryRows.length === 0 ? (
                     <p className="an-empty-hint" style={{ marginTop: 12 }}>
                         Run the stress test to populate the impact summary table.
@@ -492,20 +614,20 @@ function Analysis({ onRunStressTest }) {
                         <table className="an-table">
                             <thead>
                                 <tr>
-                                    <th>scenario_name</th>
-                                    <th>Predicted Load (MW)</th>
-                                    <th>Delta vs Normal (MW)</th>
-                                    <th>Change (%)</th>
-                                    <th>description</th>
+                                    <th>Scenario Name</th>
+                                    <th className="num">Predicted Load (MW)</th>
+                                    <th className="num">Delta vs Normal (MW)</th>
+                                    <th className="num">Change (%)</th>
+                                    <th>Description</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {summaryRows.map((r) => (
                                     <tr key={r.scenario_name}>
-                                        <td>{r.scenario_name}</td>
-                                        <td className="num">{fmtNum(r.predicted_mw, 1)}</td>
+                                        <td style={{ fontWeight: 600 }}>{r.scenario_name}</td>
+                                        <td className="num">{fmtNum(r.predicted_mw, 2)} MW</td>
                                         <td className={`num ${r.delta_mw > 0 ? 'pos' : r.delta_mw < 0 ? 'neg' : ''}`}>
-                                            {fmtSigned(r.delta_mw, 1)} MW
+                                            {fmtSigned(r.delta_mw, 2)} MW
                                         </td>
                                         <td className={`num ${r.change_pct > 0 ? 'pos' : r.change_pct < 0 ? 'neg' : ''}`}>
                                             {fmtPct(r.change_pct, 2)}

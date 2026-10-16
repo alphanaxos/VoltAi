@@ -572,10 +572,10 @@ function Monte_carlo({ onRunSimulation }) {
                                 <table className="mc-table">
                                     <thead>
                                         <tr>
-                                            <th>metric</th>
-                                            <th>P05</th>
-                                            <th>Median (P50)</th>
-                                            <th>P95</th>
+                                            <th>Metric</th>
+                                            <th className="num">P05</th>
+                                            <th className="num">Median (P50)</th>
+                                            <th className="num">P95</th>
                                         </tr>
                                     </thead>
                                     <tbody>

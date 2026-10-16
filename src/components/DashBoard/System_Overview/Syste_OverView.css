@@ -572,13 +572,18 @@
     top: 0;
     z-index: 1;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 2px solid var(--border);
+    border-right: 1px solid var(--border);
     background: var(--bg3);
     color: var(--text-secondary);
     font-size: 11px;                      /* NEW: smaller */
-    font-weight: 600;
+    font-weight: 700;
     text-align: right;
     white-space: nowrap;
+}
+
+.so-table thead th:last-child {
+    border-right: none;
 }
 
 .so-table thead th:first-child {
@@ -589,6 +594,11 @@
 .so-table .so-hour {
     padding: 0;
     border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+}
+
+.so-table td:last-child {
+    border-right: none;
 }
 
 .so-table tbody tr:last-child td,
