@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import Sidebar, { NAV_ITEMS } from '../../components/Slider/Sidebar';
-import Syste_OverView from '../../components/DashBoard/System_Overview/Syste_OverView';
+import SystemOverview from '../../components/DashBoard/System_Overview/Syste_OverView';
 import Analysis from '../../components/DashBoard/Analysis/Analysis';
 import Pypsa from '../../components/DashBoard/PyPSa/Pypsa';
-import Monte_carlo from '../../components/DashBoard/Monte_Carlo/Monte_carlo';
+import MonteCarlo from '../../components/DashBoard/Monte_Carlo/Monte_carlo';
 import './Dashboard.css';
 
 const MOBILE_QUERY = '(max-width: 900px)';
@@ -132,13 +132,13 @@ function DashBoard() {
 
         <main className="dash-content">
           {active === 'overview' ? (
-            <Syste_OverView />
+            <SystemOverview />
           ) : active === 'scenario' ? (
             <Analysis />
           ) : active === 'dispatch' ? (
             <Pypsa />
           ) : active === 'montecarlo' ? (
-            <Monte_carlo />
+            <MonteCarlo />
           ) : (
             <section className="dash-panel">
               <div className="dash-empty-box">
