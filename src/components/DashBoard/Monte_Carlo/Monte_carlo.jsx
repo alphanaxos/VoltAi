@@ -1,41 +1,78 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './Monte_carlo.css';
 
-/* 
-   Defaults + demo fallback (matches your screenshots)
-    */
+/* =====================================================================
+   Monte Carlo Risk Analysis & Uncertainty Simulation
+   API Endpoint: /energy/risk
+   ===================================================================== */
 
-const DEFAULT_KPIS = {
-    lolp: 0.0,               // %
-    eens: 0.0,               // MWh
-    reserveSufficiency: 100.0, // %
-    expectedCostMean: 152954.12,
-    bestCaseMin: 145243.77,
-    medianP50: 153204.04,
-    p95Worst: 158329.14,
-    peakDemandP95: 2365.3,   // MW
+const DIRECT_API_URL = 'https://voltai-backend-w7bt.onrender.com/energy/risk';
+
+const DEFAULT_RISK_PAYLOAD = {
+    demand_mw: [
+        1450, 1420, 1390, 1380, 1400, 1500,
+        1650, 1750, 1800, 1850, 1900, 1950,
+        1980, 2000, 1970, 1930, 1900, 1950,
+        2000, 1980, 1900, 1800, 1650, 1520,
+    ],
+    use_forecast_24h: false,
+    weather_forecasts: [
+        { temperature: 24.0, humidity: 80.0, wind_speed: 8.0, solar_irradiance: 0.0 },
+        { temperature: 23.5, humidity: 82.0, wind_speed: 7.5, solar_irradiance: 0.0 },
+        { temperature: 23.0, humidity: 83.0, wind_speed: 7.0, solar_irradiance: 0.0 },
+        { temperature: 22.5, humidity: 84.0, wind_speed: 6.5, solar_irradiance: 0.0 },
+        { temperature: 22.5, humidity: 82.0, wind_speed: 7.0, solar_irradiance: 0.0 },
+        { temperature: 23.0, humidity: 80.0, wind_speed: 8.0, solar_irradiance: 30.0 },
+        { temperature: 24.0, humidity: 76.0, wind_speed: 9.0, solar_irradiance: 150.0 },
+        { temperature: 25.5, humidity: 72.0, wind_speed: 10.0, solar_irradiance: 320.0 },
+        { temperature: 27.0, humidity: 68.0, wind_speed: 11.0, solar_irradiance: 500.0 },
+        { temperature: 28.5, humidity: 65.0, wind_speed: 12.0, solar_irradiance: 650.0 },
+        { temperature: 30.0, humidity: 60.0, wind_speed: 13.0, solar_irradiance: 780.0 },
+        { temperature: 31.0, humidity: 57.0, wind_speed: 14.0, solar_irradiance: 850.0 },
+        { temperature: 32.0, humidity: 54.0, wind_speed: 15.0, solar_irradiance: 900.0 },
+        { temperature: 33.0, humidity: 50.0, wind_speed: 15.0, solar_irradiance: 920.0 },
+        { temperature: 33.5, humidity: 48.0, wind_speed: 14.0, solar_irradiance: 850.0 },
+        { temperature: 33.0, humidity: 50.0, wind_speed: 13.0, solar_irradiance: 700.0 },
+        { temperature: 32.0, humidity: 53.0, wind_speed: 12.0, solar_irradiance: 500.0 },
+        { temperature: 30.5, humidity: 58.0, wind_speed: 11.0, solar_irradiance: 250.0 },
+        { temperature: 29.0, humidity: 62.0, wind_speed: 10.0, solar_irradiance: 80.0 },
+        { temperature: 28.0, humidity: 65.0, wind_speed: 9.0, solar_irradiance: 0.0 },
+        { temperature: 27.0, humidity: 68.0, wind_speed: 8.5, solar_irradiance: 0.0 },
+        { temperature: 26.0, humidity: 72.0, wind_speed: 8.0, solar_irradiance: 0.0 },
+        { temperature: 25.0, humidity: 76.0, wind_speed: 7.5, solar_irradiance: 0.0 },
+        { temperature: 24.5, humidity: 78.0, wind_speed: 7.0, solar_irradiance: 0.0 },
+    ],
+    calendar_overrides: [
+        {
+            is_weekend: 1,
+            is_holiday: 0,
+            is_festival: 0,
+            is_pre_holiday: 0,
+            is_post_holiday: 0,
+            is_pre_festival: 0,
+            is_post_festival: 0,
+            workday_after_holiday: 0,
+        },
+    ],
+    load_shedding_cost: 100,
+    solar_profile: [
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.03,
+        0.15, 0.32, 0.50, 0.65, 0.78, 0.85,
+        0.90, 0.92, 0.85, 0.70, 0.50, 0.25,
+        0.08, 0.0, 0.0, 0.0, 0.0, 0.0,
+    ],
 };
 
-/* Rows in the same order as the screenshot (top → bottom) */
-const DEFAULT_QUANTILES = [
-    { key: 'unserved_energy',  label: 'Unserved energy (MWh)', p05: 0,      p50: 0,      p95: 0,      unit: '' },
-    { key: 'solar_usage',      label: 'Solar usage (MWh)',     p05: 0,      p50: 0,      p95: 0,      unit: '' },
-    { key: 'gas_usage',        label: 'Gas usage (MWh)',       p05: 0,      p50: 0,      p95: 0,      unit: '' },
-    { key: 'coal_usage',       label: 'Coal usage (MWh)',      p05: 33000,  p50: 34000,  p95: 35000,  unit: '' },
-    { key: 'dispatch_cost',    label: 'Dispatch cost (₹)',     p05: 145244, p50: 153204, p95: 158329, unit: '₹' },
-    { key: 'demand_peak',      label: 'Demand peak (MW)',      p05: 0,      p50: 0,      p95: 0,      unit: '' },
-];
-
 const DISPATCH_ENGINES = [
-    { value: 'merit_order',   label: 'merit_order' },
-    { value: 'pypsa',    label: 'pypsa' },
+    { value: 'merit_order', label: 'merit_order (Merit Order)' },
+    { value: 'pypsa', label: 'pypsa (PyPSA Linear OPF)' },
 ];
 
 /* ---------- helpers ---------- */
-const fmtInt   = (n) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
-const fmtNum   = (n, d = 2) => Number(n).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
-const fmtINR   = (n) => `₹${fmtNum(n, 2)}`;
-const fmtPct   = (n, d = 2) => `${fmtNum(n, d)}%`;
+const fmtNum = (n, d = 2) =>
+    Number(n).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtINR = (n) => `₹${fmtNum(n, 2)}`;
+const fmtPct = (n, d = 2) => `${fmtNum(n, d)}%`;
 
 /* Compact number for axis ticks (20k, 40k, 60k, …) */
 const fmtAxis = (v) => {
@@ -43,25 +80,35 @@ const fmtAxis = (v) => {
     const abs = Math.abs(v);
     if (abs >= 1e6) return `${(v / 1e6).toFixed(abs % 1e6 === 0 ? 0 : 1)}M`;
     if (abs >= 1e3) return `${(v / 1e3).toFixed(abs % 1e3 === 0 ? 0 : 1)}k`;
-    return String(v);
+    return String(Math.round(v));
 };
 
 /* ---------- icons ---------- */
 function Svg({ children, size = 16, ...rest }) {
     return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...rest}>
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...rest}
+        >
             {children}
         </svg>
     );
 }
 const ChevronIcon = () => <Svg size={16} className="mc-chevron"><path d="m6 9 6 6 6-6" /></Svg>;
-const InfoIcon    = () => <Svg size={14}><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" /></Svg>;
-const CheckIcon   = () => <Svg size={14}><path d="M20 6 9 17l-5-5" /></Svg>;
-const MinusIcon   = () => <Svg size={14}><path d="M5 12h14" /></Svg>;
-const PlusIcon    = () => <Svg size={14}><path d="M12 5v14" /><path d="M5 12h14" /></Svg>;
-const DiceIcon    = () => (
-    <Svg size={20}>
+const InfoIcon = () => <Svg size={14}><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" /></Svg>;
+const CheckIcon = () => <Svg size={14}><path d="M20 6 9 17l-5-5" /></Svg>;
+const MinusIcon = () => <Svg size={14}><path d="M5 12h14" /></Svg>;
+const PlusIcon = () => <Svg size={14}><path d="M12 5v14" /><path d="M5 12h14" /></Svg>;
+const DiceIcon = () => (
+    <Svg size={18}>
         <rect x="3" y="3" width="18" height="18" rx="3" />
         <circle cx="8" cy="8" r="1.2" fill="currentColor" />
         <circle cx="16" cy="8" r="1.2" fill="currentColor" />
@@ -70,11 +117,11 @@ const DiceIcon    = () => (
         <circle cx="16" cy="16" r="1.2" fill="currentColor" />
     </Svg>
 );
-const TableIcon   = () => <Svg size={14}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /><path d="M9 4v16" /></Svg>;
+const TableIcon = () => <Svg size={14}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /><path d="M9 4v16" /></Svg>;
 
-/* 
-   Quantile Legend Component
-*/
+/* =====================================================================
+   Quantile Legend
+   ===================================================================== */
 function QuantileLegend() {
     return (
         <div className="mc-legend">
@@ -84,7 +131,7 @@ function QuantileLegend() {
             </div>
             <div className="mc-legend-item">
                 <span className="mc-legend-dot median"></span>
-                <span className="mc-legend-text">Median (Centre)</span>
+                <span className="mc-legend-text">Median P50 (Centre)</span>
             </div>
             <div className="mc-legend-item">
                 <span className="mc-legend-dot p95"></span>
@@ -98,10 +145,9 @@ function QuantileLegend() {
     );
 }
 
-/* 
-   Quantile range chart (P05 — Median — P95)
-   Pure SVG, horizontal lanes, log-friendly axis.
-*/
+/* =====================================================================
+   Quantile Range Chart (P05 — Median — P95)
+   ===================================================================== */
 function QuantileRangeChart({ rows }) {
     const wrapRef = useRef(null);
     const [size, setSize] = useState({ w: 0, h: 0 });
@@ -123,17 +169,13 @@ function QuantileRangeChart({ rows }) {
 
     const geo = useMemo(() => {
         const { w, h } = size;
-        if (!w || !h || !rows.length) return null;
+        if (!w || !h || !rows || !rows.length) return null;
 
-        const m = { top: 18, right: 26, bottom: 40, left: 160 };
+        const m = { top: 18, right: 26, bottom: 40, left: 180 };
         const iw = w - m.left - m.right;
         const ih = h - m.top - m.bottom;
 
-        const maxVal = Math.max(
-            1,
-            ...rows.flatMap((r) => [r.p05, r.p50, r.p95])
-        );
-        // round up to a nice number for the top of the axis
+        const maxVal = Math.max(1, ...rows.flatMap((r) => [r.p05, r.p50, r.p95]));
         const magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
         const niceMax = Math.ceil(maxVal / magnitude) * magnitude;
         const range = niceMax || 1;
@@ -141,16 +183,15 @@ function QuantileRangeChart({ rows }) {
         const n = rows.length;
         const laneH = ih / n;
         const y = (i) => m.top + laneH * i + laneH / 2;
-        const x = (v) => m.left + (v / range) * iw;
+        const x = (v) => m.left + (Math.max(0, v) / range) * iw;
 
-        // 6 evenly spaced ticks
         const ticks = 6;
         const xticks = Array.from({ length: ticks + 1 }, (_, i) => (range * i) / ticks);
 
         return { m, iw, ih, laneH, x, y, xticks, n };
     }, [size, rows]);
 
-    const hr = hoverRow !== null && rows[hoverRow] ? rows[hoverRow] : null;
+    const hr = hoverRow !== null && rows && rows[hoverRow] ? rows[hoverRow] : null;
 
     return (
         <div className="mc-chart-wrap">
@@ -207,7 +248,12 @@ function QuantileRangeChart({ rows }) {
                                         />
 
                                         {/* label */}
-                                        <text className={`mc-lane-label ${isHov ? 'active' : ''}`} x={geo.m.left - 12} y={cy + 4} textAnchor="end">
+                                        <text
+                                            className={`mc-lane-label ${isHov ? 'active' : ''}`}
+                                            x={geo.m.left - 12}
+                                            y={cy + 4}
+                                            textAnchor="end"
+                                        >
                                             {r.label}
                                         </text>
 
@@ -248,7 +294,7 @@ function QuantileRangeChart({ rows }) {
                                 y={size.h - 4}
                                 textAnchor="middle"
                             >
-                                Metric Value
+                                Metric Value (Empirical Quantiles P05 — Median P50 — P95)
                             </text>
                         </svg>
 
@@ -269,28 +315,28 @@ function QuantileRangeChart({ rows }) {
                                         <span className="mc-tip-dot p05"></span>
                                         <span className="mc-tip-name">P05 (Left):</span>
                                         <span className="mc-tip-val">
-                                            {hr.unit === '₹' ? fmtINR(hr.p05) : `${fmtNum(hr.p05, 1)} ${hr.unit}`}
+                                            {hr.unit === '₹' ? fmtINR(hr.p05) : `${fmtNum(hr.p05, 2)} ${hr.unit}`}
                                         </span>
                                     </div>
                                     <div className="mc-tip-row">
                                         <span className="mc-tip-dot median"></span>
                                         <span className="mc-tip-name">Median (Centre):</span>
                                         <span className="mc-tip-val">
-                                            {hr.unit === '₹' ? fmtINR(hr.p50) : `${fmtNum(hr.p50, 1)} ${hr.unit}`}
+                                            {hr.unit === '₹' ? fmtINR(hr.p50) : `${fmtNum(hr.p50, 2)} ${hr.unit}`}
                                         </span>
                                     </div>
                                     <div className="mc-tip-row">
                                         <span className="mc-tip-dot p95"></span>
                                         <span className="mc-tip-name">P95 (Right):</span>
                                         <span className="mc-tip-val">
-                                            {hr.unit === '₹' ? fmtINR(hr.p95) : `${fmtNum(hr.p95, 1)} ${hr.unit}`}
+                                            {hr.unit === '₹' ? fmtINR(hr.p95) : `${fmtNum(hr.p95, 2)} ${hr.unit}`}
                                         </span>
                                     </div>
                                     {hr.p95 > hr.p05 && (
                                         <div className="mc-tip-range">
                                             <span>90% Range Spread:</span>
                                             <strong>
-                                                {hr.unit === '₹' ? fmtINR(hr.p95 - hr.p05) : `${fmtNum(hr.p95 - hr.p05, 1)} ${hr.unit}`}
+                                                {hr.unit === '₹' ? fmtINR(hr.p95 - hr.p05) : `${fmtNum(hr.p95 - hr.p05, 2)} ${hr.unit}`}
                                             </strong>
                                         </div>
                                     )}
@@ -304,60 +350,148 @@ function QuantileRangeChart({ rows }) {
     );
 }
 
-/* 
-   Main component
-    */
+/* =====================================================================
+   Main Monte Carlo Risk Analysis Component
+   ===================================================================== */
 function Monte_carlo({ onRunSimulation }) {
-    /* ----- config state ----- */
+    /* ----- 1. Interactive input parameters requested by user ----- */
     const [nSimulations, setNSimulations] = useState(100);
-    const [seed, setSeed] = useState(42);
     const [engine, setEngine] = useState('merit_order');
     const [clipTail, setClipTail] = useState(true);
+    const [seed, setSeed] = useState(42);
 
     /* ----- results state ----- */
     const [kpis, setKpis] = useState(null);
     const [quantiles, setQuantiles] = useState(null);
+    const [baseForecast, setBaseForecast] = useState(null);
+    const [provenanceNote, setProvenanceNote] = useState(null);
     const [message, setMessage] = useState(null);
     const [running, setRunning] = useState(false);
     const [error, setError] = useState(null);
-    const [tableOpen, setTableOpen] = useState(false);
+    const [tableOpen, setTableOpen] = useState(true);
 
-    /* ----- run simulation ----- */
+    /* ----- execute API call ----- */
     const handleRun = async () => {
         setError(null);
         setMessage(null);
         setRunning(true);
         try {
-            let result;
+            const requestPayload = {
+                ...DEFAULT_RISK_PAYLOAD,
+                n_simulations: Number(nSimulations) || 100,
+                random_seed: Number(seed) >= 0 ? Number(seed) : 42,
+                dispatch_engine: engine,
+                enable_residual_clipping: Boolean(clipTail),
+            };
+
+            let data;
             if (onRunSimulation) {
-                result = await onRunSimulation({
-                    nSimulations: Number(nSimulations),
-                    seed: Number(seed),
-                    engine,
-                    clipTail,
-                });
+                data = await onRunSimulation(requestPayload);
             } else {
-                await new Promise((r) => setTimeout(r, 450));
-                const n = Number(nSimulations) || 10;
-                result = {
-                    message: `Evaluated ${n} Monte Carlo scenarios successfully!`,
-                    kpis: DEFAULT_KPIS,
-                    quantiles: DEFAULT_QUANTILES,
-                };
+                let response;
+
+                // 1. Try local dev server proxy first (/energy/risk)
+                // This bypasses CORS completely when accessing from phone/LAN/localhost
+                try {
+                    const proxyRes = await fetch('/energy/risk', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestPayload),
+                    });
+                    const ct = proxyRes.headers.get('content-type') || '';
+                    if (proxyRes.ok && ct.includes('application/json')) {
+                        response = proxyRes;
+                    }
+                } catch {
+                    /* fallback to direct API */
+                }
+
+                // 2. Direct API call if proxy is not available
+                if (!response) {
+                    response = await fetch(DIRECT_API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'accept': '*/*',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestPayload),
+                    });
+                }
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`API request failed (${response.status}): ${errText || response.statusText}`);
+                }
+
+                data = await response.json();
             }
-            setKpis(result.kpis);
-            setQuantiles(result.quantiles);
-            setMessage(result.message);
+
+            // Map risk metrics
+            const rm = data.risk_metrics || {};
+            const lolpVal = Number(rm.LOLP ?? 0);
+            const resSuff = Number(rm.reserve_sufficiency ?? 1);
+
+            const mappedKpis = {
+                lolp: lolpVal <= 1 && lolpVal > 0 ? lolpVal * 100 : lolpVal,
+                eens: Number(rm.EENS_mwh ?? 0),
+                reserveSufficiency: resSuff <= 1 ? resSuff * 100 : resSuff,
+                expectedCostMean: Number(rm.mean_cost ?? 0),
+                bestCaseMin: Number(rm.min_cost ?? 0),
+                medianP50: Number(rm.median_cost ?? 0),
+                p95Worst: Number(rm.p95_cost ?? 0),
+                peakDemandP95: Number(rm.peak_demand_p95_mw ?? 0),
+            };
+
+            // Map quantile summaries
+            const mappedQuantiles = (data.quantile_summaries || []).map((row, idx) => {
+                const metric = row.metric || `Metric ${idx + 1}`;
+                let unit = '';
+                if (metric.includes('₹')) unit = '₹';
+                else if (metric.includes('MWh')) unit = 'MWh';
+                else if (metric.includes('MW')) unit = 'MW';
+
+                return {
+                    key: `q_${idx}_${metric.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                    label: metric,
+                    p05: Number(row.p05 ?? 0),
+                    p50: Number(row.p50 ?? 0),
+                    p95: Number(row.p95 ?? 0),
+                    unit,
+                };
+            });
+
+            setKpis(mappedKpis);
+            setQuantiles(mappedQuantiles);
+            setBaseForecast(data.base_forecast_summary || null);
+            setProvenanceNote(data.uncertainty_provenance_note || null);
+            setMessage(
+                `Evaluated ${data.n_simulations ?? nSimulations} Monte Carlo scenarios with '${data.dispatch_engine ?? engine}' solver (Seed: ${data.random_seed ?? seed}) successfully!`
+            );
+            setTableOpen(true);
         } catch (err) {
-            setError((err && err.message) || 'Simulation failed. Please try again.');
+            const isCorsError =
+                err?.name === 'TypeError' &&
+                (err?.message === 'Load failed' ||
+                    err?.message?.includes('Failed to fetch') ||
+                    err?.message?.includes('NetworkError'));
+
+            if (isCorsError) {
+                setError(
+                    'CORS / Network Error: Could not connect to the backend service. Please check your network connection or CORS settings on the Render backend.'
+                );
+            } else {
+                setError((err && err.message) || 'Risk simulation failed. Please try again.');
+            }
         } finally {
             setRunning(false);
         }
     };
 
-    const bumpSeed = (dir) => setSeed((v) => Number(v) + dir);
+    /* seed stepper helpers */
+    const bumpSeed = (dir) => setSeed((v) => Math.max(0, (Number(v) || 0) + dir));
 
-    /* seed input must accept any integer >= 0 */
     const onSeedChange = (v) => {
         if (v === '') {
             setSeed('');
@@ -367,19 +501,45 @@ function Monte_carlo({ onRunSimulation }) {
         if (!Number.isNaN(n) && n >= 0) setSeed(Math.floor(n));
     };
 
-    /* nSimulations is bound to the range slider */
+    /* simulations slider helper */
     const onSliderChange = (e) => setNSimulations(Number(e.target.value));
+
+    const onSimsDirectChange = (v) => {
+        if (v === '') {
+            setNSimulations('');
+            return;
+        }
+        const n = Number(v);
+        if (!Number.isNaN(n) && n >= 1) setNSimulations(Math.floor(n));
+    };
 
     return (
         <div className="mc">
             {/* ============ CONFIG GRID ============ */}
-            <section className="mc-config">
-                {/* -- left column -- */}
+            <section className="mc-config" aria-label="Monte Carlo configuration parameters">
+                {/* -- Left column: 1. Number of Simulations & 4. Reproducibility Seed -- */}
                 <div className="mc-col">
+                    {/* 1. Number of Simulations */}
                     <div className="mc-field">
                         <div className="mc-field-head">
-                            <label className="mc-field-label" htmlFor="mc-sims">Number of Simulations</label>
-                            <span className="mc-slider-badge">{nSimulations}</span>
+                            <label className="mc-field-label" htmlFor="mc-sims">1. Number of Simulations</label>
+                            <div className="mc-sims-val-box">
+                                <input
+                                    id="mc-sims-input"
+                                    type="number"
+                                    min="1"
+                                    max="2000"
+                                    step="10"
+                                    className="mc-sims-input"
+                                    value={nSimulations}
+                                    onChange={(e) => onSimsDirectChange(e.target.value)}
+                                    onBlur={() => {
+                                        if (!nSimulations || Number(nSimulations) < 1) setNSimulations(100);
+                                    }}
+                                    aria-label="Direct input for number of simulations"
+                                />
+                                <span className="mc-sims-unit">draws</span>
+                            </div>
                         </div>
                         <input
                             id="mc-sims"
@@ -388,19 +548,32 @@ function Monte_carlo({ onRunSimulation }) {
                             min="10"
                             max="1000"
                             step="10"
-                            value={nSimulations}
+                            value={Math.min(1000, Math.max(10, Number(nSimulations) || 100))}
                             onChange={onSliderChange}
-                            style={{ '--pct': `${((nSimulations - 10) / (1000 - 10)) * 100}%` }}
+                            style={{
+                                '--pct': `${((Math.min(1000, Math.max(10, Number(nSimulations) || 100)) - 10) / (1000 - 10)) * 100}%`,
+                            }}
                             aria-valuemin="10"
                             aria-valuemax="1000"
-                            aria-valuenow={nSimulations}
+                            aria-valuenow={Number(nSimulations) || 100}
                         />
                     </div>
 
+                    {/* 4. Reproducibility Seed */}
                     <div className="mc-field">
-                        <label className="mc-field-label" htmlFor="mc-seed">Reproducibility Seed</label>
+                        <div className="mc-field-head">
+                            <label className="mc-field-label" htmlFor="mc-seed">4. Reproducibility Seed</label>
+                            <span className="mc-hint" title="Fixes pseudorandom draw sequence for deterministic replication.">
+                                <InfoIcon />
+                            </span>
+                        </div>
                         <div className="mc-stepper">
-                            <button type="button" className="mc-step-btn" onClick={() => bumpSeed(-1)} aria-label="Decrease seed">
+                            <button
+                                type="button"
+                                className="mc-step-btn"
+                                onClick={() => bumpSeed(-1)}
+                                aria-label="Decrease seed"
+                            >
                                 <MinusIcon />
                             </button>
                             <input
@@ -411,21 +584,29 @@ function Monte_carlo({ onRunSimulation }) {
                                 min="0"
                                 value={seed}
                                 onChange={(e) => onSeedChange(e.target.value)}
-                                onBlur={(e) => onSeedChange(e.target.value === '' ? 0 : e.target.value)}
+                                onBlur={(e) => onSeedChange(e.target.value === '' ? 42 : e.target.value)}
                             />
-                            <button type="button" className="mc-step-btn" onClick={() => bumpSeed(1)} aria-label="Increase seed">
+                            <button
+                                type="button"
+                                className="mc-step-btn"
+                                onClick={() => bumpSeed(1)}
+                                aria-label="Increase seed"
+                            >
                                 <PlusIcon />
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* -- right column -- */}
+                {/* -- Right column: 2. Dispatch Engine & 3. Enable Residual Tail Clipping -- */}
                 <div className="mc-col">
+                    {/* 2. Dispatch Engine Dropdown */}
                     <div className="mc-field">
                         <div className="mc-field-head">
-                            <label className="mc-field-label" htmlFor="mc-engine">Dispatch Engine</label>
-                            <span className="mc-hint" title="Solver used to dispatch the simulated 24h scenarios."><InfoIcon /></span>
+                            <label className="mc-field-label" htmlFor="mc-engine">2. Dispatch Engine</label>
+                            <span className="mc-hint" title="Select between Merit Order dispatch or PyPSA Linear OPF solver.">
+                                <InfoIcon />
+                            </span>
                         </div>
                         <div className="mc-select-wrap">
                             <select
@@ -434,23 +615,29 @@ function Monte_carlo({ onRunSimulation }) {
                                 value={engine}
                                 onChange={(e) => setEngine(e.target.value)}
                             >
-                                {DISPATCH_ENGINES.map((e) => (
-                                    <option key={e.value} value={e.value}>{e.label}</option>
+                                {DISPATCH_ENGINES.map((eng) => (
+                                    <option key={eng.value} value={eng.value}>{eng.label}</option>
                                 ))}
                             </select>
                             <ChevronIcon />
                         </div>
                     </div>
 
-                    <label className="mc-check">
-                        <input
-                            type="checkbox"
-                            checked={clipTail}
-                            onChange={(e) => setClipTail(e.target.checked)}
-                        />
-                        <span className="mc-check-box" />
-                        <span className="mc-check-text">Enable Residual Tail Clipping (P05–P95)</span>
-                    </label>
+                    {/* 3. Enable Residual Tail Clipping (P05–P95) */}
+                    <div className="mc-field" style={{ justifyContent: 'center' }}>
+                        <div className="mc-field-head" style={{ marginBottom: 4 }}>
+                            <span className="mc-field-label">3. Residual Bounds</span>
+                        </div>
+                        <label className="mc-check">
+                            <input
+                                type="checkbox"
+                                checked={clipTail}
+                                onChange={(e) => setClipTail(e.target.checked)}
+                            />
+                            <span className="mc-check-box" />
+                            <span className="mc-check-text">Enable Residual Tail Clipping (P05–P95)</span>
+                        </label>
+                    </div>
                 </div>
             </section>
 
@@ -462,7 +649,17 @@ function Monte_carlo({ onRunSimulation }) {
                     onClick={handleRun}
                     disabled={running}
                 >
-                    {running ? 'Running…' : 'Run Monte Carlo Risk Simulation'}
+                    {running ? (
+                        <>
+                            <span className="mc-spinner" aria-hidden="true" />
+                            <span>Running Simulation…</span>
+                        </>
+                    ) : (
+                        <>
+                            <DiceIcon />
+                            <span>Run Monte Carlo Risk Simulation</span>
+                        </>
+                    )}
                 </button>
                 {error && <span className="mc-msg error">{error}</span>}
             </div>
@@ -475,34 +672,68 @@ function Monte_carlo({ onRunSimulation }) {
                 </div>
             )}
 
+            {/* ============ BASE FORECAST SUMMARY ============ */}
+            {baseForecast && (
+                <div className="mc-base-summary" aria-label="Base forecast overview">
+                    <span className="mc-base-title">Base Forecast:</span>
+                    <div className="mc-base-items">
+                        <div className="mc-base-item">
+                            <span>Peak Demand:</span>
+                            <strong>{fmtNum(baseForecast.peak_demand_mw, 1)} MW</strong>
+                        </div>
+                        <div className="mc-base-item">
+                            <span>Mean Demand:</span>
+                            <strong>{fmtNum(baseForecast.mean_demand_mw, 2)} MW</strong>
+                        </div>
+                        <div className="mc-base-item">
+                            <span>Total Demand:</span>
+                            <strong>{fmtNum(baseForecast.total_demand_mwh, 1)} MWh</strong>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ============ KPI GRID ============ */}
             {kpis && (
                 <section className="mc-kpis" aria-label="Monte Carlo risk metrics">
                     <div className="mc-kpi primary">
                         <div className="mc-kpi-label">
                             Loss of Load Probability (LOLP)
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="Probability that available system generation capacity fails to cover demand.">
+                                <InfoIcon />
+                            </span>
                         </div>
                         <div className="mc-kpi-value">{fmtPct(kpis.lolp, 2)}</div>
                     </div>
+
                     <div className="mc-kpi">
                         <div className="mc-kpi-label">
                             Expected Unserved Energy (EENS)
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="Expected magnitude of unserved energy across all evaluated trajectories.">
+                                <InfoIcon />
+                            </span>
                         </div>
-                        <div className="mc-kpi-value">{fmtNum(kpis.eens, 2)} <span className="mc-kpi-unit">MWh</span></div>
+                        <div className="mc-kpi-value">
+                            {fmtNum(kpis.eens, 2)} <span className="mc-kpi-unit">MWh</span>
+                        </div>
                     </div>
+
                     <div className="mc-kpi">
                         <div className="mc-kpi-label">
                             Reserve Sufficiency
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="Fraction of simulated scenarios where operating reserves met criteria.">
+                                <InfoIcon />
+                            </span>
                         </div>
                         <div className="mc-kpi-value">{fmtPct(kpis.reserveSufficiency, 2)}</div>
                     </div>
+
                     <div className="mc-kpi">
                         <div className="mc-kpi-label">
                             Expected Cost (Mean)
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="Average economic dispatch cost across all simulated runs.">
+                                <InfoIcon />
+                            </span>
                         </div>
                         <div className="mc-kpi-value">{fmtINR(kpis.expectedCostMean)}</div>
                     </div>
@@ -510,30 +741,43 @@ function Monte_carlo({ onRunSimulation }) {
                     <div className="mc-kpi">
                         <div className="mc-kpi-label">
                             Best-Case Cost (Min)
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="Minimum dispatch cost recorded across all scenarios.">
+                                <InfoIcon />
+                            </span>
                         </div>
                         <div className="mc-kpi-value">{fmtINR(kpis.bestCaseMin)}</div>
                     </div>
+
                     <div className="mc-kpi">
                         <div className="mc-kpi-label">
                             Median Cost (P50)
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="50th percentile median expected dispatch cost.">
+                                <InfoIcon />
+                            </span>
                         </div>
                         <div className="mc-kpi-value">{fmtINR(kpis.medianP50)}</div>
                     </div>
+
                     <div className="mc-kpi">
                         <div className="mc-kpi-label">
                             P95 Worst-Case Cost
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="95th percentile risk ceiling for generation dispatch expenses.">
+                                <InfoIcon />
+                            </span>
                         </div>
                         <div className="mc-kpi-value">{fmtINR(kpis.p95Worst)}</div>
                     </div>
+
                     <div className="mc-kpi">
                         <div className="mc-kpi-label">
                             Peak Demand P95
-                            <span className="mc-hint"><InfoIcon /></span>
+                            <span className="mc-hint" title="95th percentile maximum coincident hourly peak demand.">
+                                <InfoIcon />
+                            </span>
                         </div>
-                        <div className="mc-kpi-value">{fmtNum(kpis.peakDemandP95, 1)} <span className="mc-kpi-unit">MW</span></div>
+                        <div className="mc-kpi-value">
+                            {fmtNum(kpis.peakDemandP95, 1)} <span className="mc-kpi-unit">MW</span>
+                        </div>
                     </div>
                 </section>
             )}
@@ -544,7 +788,7 @@ function Monte_carlo({ onRunSimulation }) {
                     <div className="mc-chart-head">
                         <div>
                             <h2 className="mc-card-title">Empirical Scenario Quantile Ranges</h2>
-                            <p className="mc-card-sub">Empirical Scenario Quantile Ranges (P05 — Median P50 — P95)</p>
+                            <p className="mc-card-sub">P05 (5th Percentile) — Median P50 — P95 (95th Percentile Bounds)</p>
                         </div>
                         <QuantileLegend />
                     </div>
@@ -573,18 +817,24 @@ function Monte_carlo({ onRunSimulation }) {
                                     <thead>
                                         <tr>
                                             <th>Metric</th>
-                                            <th className="num">P05</th>
+                                            <th className="num">P05 (5th %)</th>
                                             <th className="num">Median (P50)</th>
-                                            <th className="num">P95</th>
+                                            <th className="num">P95 (95th %)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {quantiles.map((r) => (
                                             <tr key={r.key}>
-                                                <td>{r.label}</td>
-                                                <td className="num">{fmtNum(r.p05, 2)}</td>
-                                                <td className="num">{fmtNum(r.p50, 2)}</td>
-                                                <td className="num">{fmtNum(r.p95, 2)}</td>
+                                                <td style={{ fontWeight: 600 }}>{r.label}</td>
+                                                <td className="num">
+                                                    {r.unit === '₹' ? fmtINR(r.p05) : fmtNum(r.p05, 2)}
+                                                </td>
+                                                <td className="num">
+                                                    {r.unit === '₹' ? fmtINR(r.p50) : fmtNum(r.p50, 2)}
+                                                </td>
+                                                <td className="num">
+                                                    {r.unit === '₹' ? fmtINR(r.p95) : fmtNum(r.p95, 2)}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -600,13 +850,32 @@ function Monte_carlo({ onRunSimulation }) {
                 <aside className="mc-note">
                     <span className="mc-note-icon"><InfoIcon /></span>
                     <p>
-                        <strong>Interpretation Note:</strong> Probabilistic risk metrics evaluated via residual
-                        bootstrapping from the stacked out-of-fold ensemble. Tail clipping applied between 5th and
-                        95th empirical percentiles. Reported quantiles represent empirical scenario bounds across
-                        simulated trajectories and must not be interpreted as statistically calibrated prediction
-                        intervals.
+                        <strong>Interpretation Note: </strong>
+                        {provenanceNote || (
+                            <>
+                                Probabilistic risk metrics evaluated via residual bootstrapping from the stacked out-of-fold
+                                ensemble. Tail clipping applied between 5th and 95th empirical percentiles. Reported quantiles
+                                represent empirical scenario bounds across simulated trajectories and must not be interpreted as
+                                statistically calibrated prediction intervals.
+                            </>
+                        )}
                     </p>
                 </aside>
+            )}
+
+            {/* ============ INITIAL EMPTY STATE ============ */}
+            {!kpis && !running && (
+                <section className="mc-empty">
+                    <div className="mc-empty-icon">
+                        <DiceIcon />
+                    </div>
+                    <h3 className="mc-empty-title">Monte Carlo Risk Analysis Ready</h3>
+                    <p className="mc-empty-hint">
+                        Configure the parameters above (Number of Simulations, Dispatch Engine, Tail Clipping, and Random Seed)
+                        and click <strong>Run Monte Carlo Risk Simulation</strong> to compute probabilistic reserve adequacy,
+                        loss-of-load probability, and dispatch cost quantiles.
+                    </p>
+                </section>
             )}
         </div>
     );
