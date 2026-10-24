@@ -612,7 +612,7 @@ function Syste_OverView({ telemetry, series, onGenerate, onRefresh }) {
                                     <p>Select a date above or click a quick chip (Today, Tomorrow) to automatically load live weather data and generate the load prediction.</p>
                                 </div>
                             ) : (
-                                <div>
+                                <div className="so-table-block">
                                     <div className="so-table-head">
                                         <span className="so-table-title">View / Edit 24-Hour Weather Forecast Inputs ({selectedDate})</span>
                                         <span className="so-table-tools">

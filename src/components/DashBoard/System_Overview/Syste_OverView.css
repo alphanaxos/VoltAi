@@ -303,6 +303,10 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--card);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .so-chart-card {
@@ -415,6 +419,10 @@
 /* ---------- Forecast dropdown ---------- */
 .so-collapse-card {
     overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .so-collapse-card.open {
@@ -434,6 +442,7 @@
     text-align: left;
     cursor: pointer;
     transition: background 0.2s;
+    box-sizing: border-box;
 }
 
 .so-collapse-trigger:hover {
@@ -485,6 +494,10 @@
     display: grid;
     grid-template-rows: 0fr;
     transition: grid-template-rows 0.3s ease;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .so-collapse.open {
@@ -494,8 +507,12 @@
 
 .so-collapse-inner {
     min-height: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     overflow: hidden;
     visibility: hidden;
+    box-sizing: border-box;
     transition: visibility 0s linear 0.3s;
 }
 
@@ -511,6 +528,10 @@
     gap: 16px;
     padding: 20px;
     min-height: 480px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 /* ---------- Notice ---------- */
@@ -525,6 +546,12 @@
     font-size: 12px;                      /* NEW: smaller */
     line-height: 1.55;
     color: var(--text);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .so-notice svg {
@@ -535,6 +562,9 @@
 
 .so-notice p {
     margin: 0;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .so-notice strong {
@@ -662,6 +692,15 @@
 }
 
 /* ---------- Editable table ---------- */
+.so-table-block {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
 .so-table-head {
     display: flex;
     align-items: center;
@@ -669,18 +708,23 @@
     flex-wrap: wrap;
     gap: 6px 14px;
     margin-bottom: 8px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .so-table-title {
     font-size: 12.5px;                    /* NEW: smaller */
     font-weight: 600;
     color: var(--text-primary);
+    word-break: break-word;
 }
 
 .so-table-tools {
     display: inline-flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .so-table-meta {
@@ -689,11 +733,17 @@
 }
 
 .so-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     max-height: 320px;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--card);
+    box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
 }
 
 .so-table {
@@ -861,6 +911,10 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--bg);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .so-result-header {
@@ -875,6 +929,9 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .so-result-title {
@@ -890,6 +947,9 @@
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
     margin-top: 12px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .so-stats > div {
@@ -923,6 +983,9 @@
 @media (max-width: 700px) {
     .so {
         gap: 16px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
     .so-head {
@@ -956,15 +1019,20 @@
     }
 
     .so-chart {
-        height: 250px;
+        height: 230px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
     }
 
     .so-chart.compact {
-        height: 220px;
+        height: 200px;
     }
 
     .so-collapse-trigger {
-        padding: 14px;
+        padding: 14px 12px;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .so-trigger-title {
@@ -972,7 +1040,99 @@
     }
 
     .so-forecast {
-        padding: 14px;
+        padding: 14px 12px;
+        min-height: 420px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .so-notice {
+        padding: 10px 12px;
+        font-size: 11.5px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .so-date-row {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .so-table-block {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .so-table-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .so-table-wrap {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .so-result {
+        padding: 12px 10px 6px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .so-result-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .so-stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-top: 10px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .so-stats > div {
+        padding: 8px 6px;
+        text-align: center;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .so-stats span {
+        font-size: 10px;
+    }
+
+    .so-stats strong {
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .so-stats em {
+        font-size: 9.5px;
+        white-space: nowrap;
     }
 
     .so-actions .so-btn.primary {
@@ -982,6 +1142,13 @@
     .so-title-icon {
         width: 34px;
         height: 34px;
+    }
+}
+
+@media (max-width: 380px) {
+    .so-stats {
+        grid-template-columns: 1fr;
+        gap: 6px;
     }
 }
 

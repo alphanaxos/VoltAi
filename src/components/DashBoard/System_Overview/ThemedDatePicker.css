@@ -10,6 +10,9 @@
     gap: 6px;
     font-family: var(--font-body, -apple-system, BlinkMacSystemFont, sans-serif);
     z-index: 50;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .tdp-label {
@@ -32,6 +35,9 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* Trigger Button */
@@ -384,10 +390,43 @@
     opacity: 0.9;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
+    .tdp-wrapper {
+        width: 100%;
+    }
+
+    .tdp-input-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .tdp-trigger {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        box-sizing: border-box;
+    }
+
+    .tdp-trigger-text {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .tdp-chips {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
     .tdp-popover {
-        width: min(310px, calc(100vw - 40px));
+        width: min(310px, calc(100vw - 36px));
+        max-width: calc(100vw - 36px);
         left: 0;
+        box-sizing: border-box;
     }
 }
+
 
