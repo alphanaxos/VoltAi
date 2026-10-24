@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './Syste_OverView.css';
+import useForecast24h from '../../../hooks/useForecast24h';
+import ThemedDatePicker from './ThemedDatePicker';
 
 /* =====================================================================
    Defaults (demo data). Replace by passing props:
@@ -19,20 +21,6 @@ const DEFAULT_TELEMETRY = {
     humidityPct: 69,
 };
 
-const TEMP = [20.4, 20.4, 20.4, 20.4, 20.4, 20.4, 27.2, 27.8, 28.5, 29.1, 29.6, 30.1, 30.4, 30.2, 29.8, 29.1, 28.2, 27.0, 25.6, 24.4, 23.4, 22.6, 21.8, 21.0];
-const HUM = [80, 80, 80, 80, 80, 80, 56, 54, 51, 49, 47, 45, 44, 45, 47, 50, 54, 60, 67, 72, 76, 78, 79, 80];
-const WIND = [1.8, 1.9, 2.1, 2.2, 2.4, 1.8, 1.9, 2.1, 2.2, 2.4, 2.6, 2.8, 3.0, 3.1, 3.0, 2.8, 2.6, 2.4, 2.2, 2.1, 2.0, 1.9, 1.8, 1.8];
-const SOLAR = [0, 0, 0, 0, 0, 0, 0, 259, 472, 637, 781, 889, 921, 862, 731, 548, 340, 142, 22, 0, 0, 0, 0, 0];
-
-const makeDefaultRows = () =>
-    Array.from({ length: 24 }, (_, h) => ({
-        hour: h,
-        temp: TEMP[h],
-        humidity: HUM[h],
-        wind: WIND[h],
-        solar: SOLAR[h],
-    }));
-
 const FIELDS = [
     { key: 'temp', label: 'Temp (°C)', step: 0.1, min: -10, max: 60 },
     { key: 'humidity', label: 'Humidity (%)', step: 1, min: 0, max: 100 },
@@ -45,6 +33,17 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const pad = (n) => String(n).padStart(2, '0');
 const fmtDay = (d) => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 const fmtStamp = (d) => `${fmtDay(d)}, ${d.getFullYear()} ${pad(d.getHours())}:00`;
+const fmtFullDate = (dateStr) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    });
+};
 const fmtNum = (n, digits = 1) =>
     Number(n).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
@@ -337,51 +336,98 @@ function Syste_OverView({ telemetry, series, onGenerate, onRefresh }) {
         return ticks;
     }, [demand]);
 
+    /* ----- live forecast hook ----- */
+    const {
+        selectedDate, setSelectedDate,
+        calendarOverrides,
+        festivalInfo,
+        loading: fetchingLive,
+        fetchLiveData,
+        generateForecast,
+        setError: setHookError,
+    } = useForecast24h();
+
+    const [dataSource, setDataSource] = useState('none');
+    const [liveDefaults, setLiveDefaults] = useState(null);
+
     /* ----- forecast dropdown ----- */
     const [open, setOpen] = useState(false);
-    const [rows, setRows] = useState(makeDefaultRows);
+    const [rows, setRows] = useState(null);
     const [generating, setGenerating] = useState(false);
     const [forecast, setForecast] = useState(null);
     const [message, setMessage] = useState(null);
 
-    const defaults = useMemo(makeDefaultRows, []);
-    const isEdited = (i, key) => String(rows[i][key]) !== String(defaults[i][key]);
-    const editedCount = rows.reduce((n, _, i) => n + FIELDS.filter((f) => isEdited(i, f.key)).length, 0);
+    const defaults = liveDefaults || [];
+    const isEdited = (i, key) => Boolean(rows && defaults[i] && String(rows[i][key]) !== String(defaults[i][key]));
+    const editedCount = rows ? rows.reduce((n, _, i) => n + FIELDS.filter((f) => isEdited(i, f.key)).length, 0) : 0;
 
-    const setCell = (i, key, value) =>
+    const setCell = (i, key, value) => {
+        if (!rows) return;
         setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
-
-    const clampCell = (i, f, value) => {
-        if (value === '' || Number.isNaN(Number(value))) {
-            setCell(i, f.key, defaults[i][f.key]);
-            return;
-        }
-        setCell(i, f.key, Math.min(f.max, Math.max(f.min, Number(value))));
     };
 
-    const handleGenerate = async () => {
-        setMessage(null);
-        if (!onGenerate) {
-            setMessage({ type: 'info', text: 'Forecast service is not connected yet. Pass an onGenerate prop that calls your XGBoost endpoint.' });
-            return;
+    const clampCell = (i, f, value) => {
+        if (!rows) return;
+        let finalVal = Number(value);
+        if (value === '' || Number.isNaN(finalVal)) {
+            finalVal = defaults[i] ? defaults[i][f.key] : 0;
+        } else {
+            finalVal = Math.min(f.max, Math.max(f.min, finalVal));
         }
+        const updated = rows.map((r, idx) => (idx === i ? { ...r, [f.key]: finalVal } : r));
+        setRows(updated);
+        if (String(rows[i][f.key]) !== String(finalVal)) {
+            runPrediction(updated, calendarOverrides);
+        }
+    };
+
+    /* Auto-predict helper */
+    const runPrediction = async (weatherRows, calOverrides) => {
+        if (!weatherRows || weatherRows.length !== 24) return;
         setGenerating(true);
+        setMessage(null);
         try {
-            const payload = rows.map((r) => ({
-                hour: r.hour,
-                temp: Number(r.temp) || 0,
-                humidity: Number(r.humidity) || 0,
-                wind: Number(r.wind) || 0,
-                solar: Number(r.solar) || 0,
-            }));
-            const out = await onGenerate(payload);
-            setForecast(
-                out.map((v, i) => (typeof v === 'number' ? { hour: i, mw: v } : { hour: v.hour ?? i, mw: v.mw ?? v.value }))
-            );
+            const result = await generateForecast(weatherRows, calOverrides || calendarOverrides);
+            if (result && result.predictions) {
+                setForecast(
+                    result.predictions.map((p) => ({
+                        hour: p.hour,
+                        mw: p.predicted_load_mw,
+                    }))
+                );
+            } else {
+                throw new Error('Unexpected response format from prediction API.');
+            }
         } catch (err) {
-            setMessage({ type: 'error', text: (err && err.message) || 'Forecast failed. Please try again.' });
+            setMessage({ type: 'error', text: (err && err.message) || 'Forecast prediction failed.' });
         } finally {
             setGenerating(false);
+        }
+    };
+
+    /* Auto-fetch live weather + solar + festival data whenever a date is selected, then automatically generate forecast */
+    const handleDateChange = async (newDate) => {
+        setSelectedDate(newDate);
+        if (!newDate) {
+            setRows(null);
+            setLiveDefaults(null);
+            setForecast(null);
+            setDataSource('none');
+            return;
+        }
+        setMessage(null);
+        setHookError(null);
+        setForecast(null);
+
+        // Step 1: Fetch live weather, solar, and festival data
+        const result = await fetchLiveData(newDate);
+        if (result && result.rows) {
+            setRows(result.rows);
+            setLiveDefaults(result.rows.map((r) => ({ ...r })));
+            setDataSource('live');
+
+            // Step 2: Auto-generate the 24-hour load prediction immediately
+            await runPrediction(result.rows, result.calendar);
         }
     };
 
@@ -505,82 +551,162 @@ function Syste_OverView({ telemetry, series, onGenerate, onRefresh }) {
                             <div className="so-notice">
                                 <InfoIcon />
                                 <p>
-                                    <strong>Weather Input Notice:</strong> The weather values below are <b>demonstration example inputs</b>{' '}
-                                    reflecting typical Bengaluru diurnal weather. They can be freely edited before running the forecast.
+                                    {selectedDate && dataSource === 'live' ? (
+                                        <>
+                                            <strong>Live Weather Data:</strong> Values below were fetched in real-time from{' '}
+                                            <b>OpenWeatherMap</b> and <b>Open-Meteo</b> for <b>{selectedDate}</b>. You can review or edit them before re-generating.
+                                        </>
+                                    ) : (
+                                        <>
+                                            <strong>Live Data Sources:</strong> Weather forecast is fetched in real-time from <b>OpenWeatherMap</b>, solar irradiance from <b>Open-Meteo</b>, and calendar/festival data from <b>Tathaastu API</b> for Bengaluru (Asia/Kolkata). Select a date to begin.
+                                        </>
+                                    )}
                                 </p>
                             </div>
 
-                            <div>
-                                <div className="so-table-head">
-                                    <span className="so-table-title">View / Edit 24-Hour Weather Forecast Inputs</span>
-                                    <span className="so-table-tools">
-                                        {editedCount > 0 && <span className="so-table-meta">{editedCount} edited</span>}
-                                        <button
-                                            type="button"
-                                            className="so-link-btn"
-                                            onClick={() => setRows(makeDefaultRows())}
-                                            disabled={editedCount === 0}
-                                        >
-                                            Reset inputs
-                                        </button>
-                                    </span>
-                                </div>
+                            {/* ---- Themed Date picker with Auto-Fetch ---- */}
+                            <div className="so-date-row">
+                                <ThemedDatePicker
+                                    value={selectedDate}
+                                    onChange={handleDateChange}
+                                    label="Forecast Date"
+                                    disabled={fetchingLive || generating}
+                                    loading={fetchingLive || generating}
+                                />
+                            </div>
 
-                                <div className="so-table-wrap" tabIndex={0}>
-                                    <table className="so-table">
-                                        <thead>
-                                            <tr>
-                                                <th scope="col">Hour (0-23)</th>
-                                                {FIELDS.map((f) => (
-                                                    <th scope="col" key={f.key}>
-                                                        {f.label}
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rows.map((r, i) => (
-                                                <tr key={r.hour}>
-                                                    <th scope="row" className="so-hour">
-                                                        {r.hour}
-                                                    </th>
+                            {festivalInfo && (
+                                <div className="so-calendar-summary">
+                                    <span className={`so-badge-pill ${festivalInfo.isWeekend ? 'weekend' : 'weekday'}`}>
+                                        <span className="so-badge-dot" />
+                                        {festivalInfo.isWeekend ? 'Weekend' : 'Weekday'}
+                                    </span>
+                                    {festivalInfo.isFestival && (
+                                        <span className="so-badge-pill festival">
+                                            Festival: <strong>{festivalInfo.names.join(', ')}</strong>
+                                        </span>
+                                    )}
+                                    {festivalInfo.isHoliday && (
+                                        <span className="so-badge-pill holiday">
+                                            Public Holiday
+                                        </span>
+                                    )}
+                                    {!festivalInfo.isFestival && !festivalInfo.isHoliday && (
+                                        <span className="so-badge-pill standard">
+                                            Regular Operating Day
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            {!rows ? (
+                                <div className="so-table-placeholder">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                        <line x1="16" y1="2" x2="16" y2="6" />
+                                        <line x1="8" y1="2" x2="8" y2="6" />
+                                        <line x1="3" y1="10" x2="21" y2="10" />
+                                        <circle cx="12" cy="15" r="1.5" />
+                                    </svg>
+                                    <h4>No Forecast Date Selected</h4>
+                                    <p>Select a date above or click a quick chip (Today, Tomorrow) to automatically load live weather data and generate the load prediction.</p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <div className="so-table-head">
+                                        <span className="so-table-title">View / Edit 24-Hour Weather Forecast Inputs ({selectedDate})</span>
+                                        <span className="so-table-tools">
+                                            {editedCount > 0 && <span className="so-table-meta">{editedCount} edited</span>}
+                                            <button
+                                                type="button"
+                                                className="so-link-btn"
+                                                onClick={() => {
+                                                    if (!liveDefaults) return;
+                                                    const resetRows = liveDefaults.map((r) => ({ ...r }));
+                                                    setRows(resetRows);
+                                                    runPrediction(resetRows, calendarOverrides);
+                                                }}
+                                                disabled={editedCount === 0}
+                                            >
+                                                Reset inputs
+                                            </button>
+                                        </span>
+                                    </div>
+
+                                    <div className="so-table-wrap" tabIndex={0}>
+                                        <table className="so-table">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Hour (0-23)</th>
                                                     {FIELDS.map((f) => (
-                                                        <td key={f.key}>
-                                                            <input
-                                                                className={`so-cell ${isEdited(i, f.key) ? 'edited' : ''}`}
-                                                                type="number"
-                                                                inputMode="decimal"
-                                                                step={f.step}
-                                                                min={f.min}
-                                                                max={f.max}
-                                                                value={r[f.key]}
-                                                                aria-label={`${f.label} at hour ${r.hour}`}
-                                                                onChange={(e) => setCell(i, f.key, e.target.value)}
-                                                                onBlur={(e) => clampCell(i, f, e.target.value)}
-                                                            />
-                                                        </td>
+                                                        <th scope="col" key={f.key}>
+                                                            {f.label}
+                                                        </th>
                                                     ))}
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                                            </thead>
+                                            <tbody>
+                                                {rows.map((r, i) => (
+                                                    <tr key={r.hour}>
+                                                        <th scope="row" className="so-hour">
+                                                            {r.hour}
+                                                        </th>
+                                                        {FIELDS.map((f) => (
+                                                            <td key={f.key}>
+                                                                <input
+                                                                    className={`so-cell ${isEdited(i, f.key) ? 'edited' : ''}`}
+                                                                    type="number"
+                                                                    inputMode="decimal"
+                                                                    step={f.step}
+                                                                    min={f.min}
+                                                                    max={f.max}
+                                                                    value={r[f.key]}
+                                                                    aria-label={`${f.label} at hour ${r.hour}`}
+                                                                    onChange={(e) => setCell(i, f.key, e.target.value)}
+                                                                    onBlur={(e) => clampCell(i, f, e.target.value)}
+                                                                />
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
 
-                            <div className="so-actions">
-                                <button type="button" className="so-btn primary" onClick={handleGenerate} disabled={generating}>
-                                    <Svg size={15}>
-                                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                                    </Svg>
-                                    {generating ? 'Generating…' : 'Generate 24-Hour Forecast'}
-                                </button>
-                                {message && <span className={`so-msg ${message.type}`}>{message.text}</span>}
-                            </div>
+                                    {(generating || message) && (
+                                        <div className="so-predict-status">
+                                            {generating && (
+                                                <div className="so-predict-loading">
+                                                    <span className="tdp-spinner" aria-hidden="true" />
+                                                    <span className="so-predict-text">
+                                                        Predicting 24-hour demand for <strong>{fmtFullDate(selectedDate)}</strong>…
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {message && (
+                                                <div className={`so-status-alert ${message.type}`}>
+                                                    <span className="so-alert-dot" />
+                                                    <span>{message.text}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {forecast && forecastStats && (
                                 <div className="so-result">
-                                    <h3 className="so-result-title">Day-ahead load forecast</h3>
-                                    <p className="so-card-sub">Predicted electrical demand (MW) for the next 24 hours</p>
+                                    <div className="so-result-header">
+                                        <div className="so-result-title-row">
+                                            <h3 className="so-result-title">Day-ahead load forecast</h3>
+                                            <span className="so-badge-pill weekday">
+                                                Forecast Date: <strong>{fmtFullDate(selectedDate)}</strong>
+                                            </span>
+                                        </div>
+                                        <p className="so-card-sub">
+                                            Predicted electrical demand (MW) across 24 hours for <strong>{fmtFullDate(selectedDate)}</strong> (00:00 – 23:00 IST)
+                                        </p>
+                                    </div>
 
                                     <div className="so-stats">
                                         <div>
@@ -605,9 +731,9 @@ function Syste_OverView({ telemetry, series, onGenerate, onRefresh }) {
                                         points={forecastPoints}
                                         xTicks={forecastTicks}
                                         yLabel="Predicted Demand (MW)"
-                                        xLabel="Hour of day"
+                                        xLabel={`Hour of day (${fmtFullDate(selectedDate)})`}
                                         gradId="so-grad-forecast"
-                                        label="Line chart of the 24-hour day-ahead load forecast in megawatts"
+                                        label={`Line chart of the 24-hour day-ahead load forecast for ${fmtFullDate(selectedDate)} in megawatts`}
                                     />
                                 </div>
                             )}

@@ -1,0 +1,393 @@
+/* =====================================================================
+   ThemedDatePicker.css
+   Bespoke, premium datepicker component matching VoltAI Design System
+   ===================================================================== */
+
+.tdp-wrapper {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: var(--font-body, -apple-system, BlinkMacSystemFont, sans-serif);
+    z-index: 50;
+}
+
+.tdp-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.tdp-label svg {
+    color: var(--c);
+}
+
+.tdp-input-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Trigger Button */
+.tdp-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--text-primary);
+    font-family: var(--font-body, inherit);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 1px 3px rgba(23, 33, 43, 0.04);
+}
+
+.tdp-trigger:hover:not(:disabled) {
+    border-color: var(--border-c);
+    background: var(--bg);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(31, 138, 112, 0.08);
+}
+
+.tdp-trigger.active {
+    border-color: var(--c);
+    box-shadow: 0 0 0 3px rgba(31, 138, 112, 0.18);
+    background: var(--card);
+}
+
+.tdp-trigger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.tdp-trigger-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--c);
+}
+
+.tdp-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(31, 138, 112, 0.25);
+    border-top-color: var(--c);
+    border-radius: 50%;
+    animation: tdpSpin 0.7s linear infinite;
+    display: inline-block;
+}
+
+@keyframes tdpSpin {
+    to { transform: rotate(360deg); }
+}
+
+.tdp-trigger-text {
+    min-width: 150px;
+    text-align: left;
+    color: var(--text-primary);
+}
+
+.tdp-trigger:not(.has-value) .tdp-trigger-text {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.tdp-trigger-arrow {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-tertiary);
+    transition: transform 0.2s ease;
+}
+
+.tdp-trigger.active .tdp-trigger-arrow {
+    transform: rotate(180deg);
+    color: var(--c);
+}
+
+/* Quick preset chips */
+.tdp-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.tdp-chip {
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-secondary);
+    font-family: var(--font-body, inherit);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tdp-chip:hover {
+    border-color: var(--c);
+    color: var(--c);
+    background: rgba(31, 138, 112, 0.06);
+}
+
+.tdp-chip.active {
+    background: rgba(31, 138, 112, 0.12);
+    border-color: var(--c);
+    color: var(--c);
+    font-weight: 600;
+}
+
+/* =====================================================================
+   Calendar Popover
+   ===================================================================== */
+
+.tdp-popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 1000;
+    width: 310px;
+    padding: 16px;
+    border-radius: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 18px 40px -6px rgba(23, 33, 43, 0.16),
+                0 4px 12px rgba(23, 33, 43, 0.06);
+    animation: tdpPopIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tdpPopIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Header */
+.tdp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.tdp-header-title {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--font-display, sans-serif);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.tdp-month {
+    color: var(--text-primary);
+}
+
+.tdp-year {
+    color: var(--c2);
+    font-weight: 600;
+}
+
+.tdp-nav-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tdp-nav-btn {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tdp-nav-btn:hover {
+    border-color: var(--border-c);
+    color: var(--c);
+    background: rgba(31, 138, 112, 0.08);
+}
+
+/* Weekday row */
+.tdp-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.tdp-weekday {
+    font-family: var(--font-mono, monospace);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+}
+
+.tdp-weekday.weekend {
+    color: var(--c2);
+}
+
+/* Days Grid */
+.tdp-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.tdp-day {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-body, inherit);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.tdp-day:hover:not(.selected) {
+    background: rgba(31, 138, 112, 0.08);
+    color: var(--c);
+}
+
+.tdp-day.other-month {
+    color: var(--text-tertiary);
+    opacity: 0.45;
+}
+
+.tdp-day.today {
+    border-color: var(--border-c);
+    font-weight: 700;
+}
+
+.tdp-day.selected {
+    background: var(--c) !important;
+    color: #ffffff !important;
+    font-weight: 700;
+    box-shadow: 0 4px 10px rgba(31, 138, 112, 0.35);
+    border-color: transparent;
+}
+
+/* Live forecast indicator dot */
+.tdp-live-dot {
+    position: absolute;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 4px var(--c);
+}
+
+.tdp-day.live-ready:not(.selected) {
+    color: var(--c);
+    font-weight: 600;
+}
+
+/* Footer */
+.tdp-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.tdp-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.tdp-legend-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--c);
+}
+
+.tdp-legend-text {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+
+.tdp-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tdp-btn-ghost {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--c);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.tdp-btn-ghost:hover {
+    background: rgba(31, 138, 112, 0.08);
+}
+
+.tdp-btn-primary {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 6px;
+    background: var(--c);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.tdp-btn-primary:hover {
+    opacity: 0.9;
+}
+
+@media (max-width: 480px) {
+    .tdp-popover {
+        width: min(310px, calc(100vw - 40px));
+        left: 0;
+    }
+}
+

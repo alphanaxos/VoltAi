@@ -253,6 +253,16 @@
     font-weight: 600;
 }
 
+.so-badge.festival {
+    background: rgba(142, 68, 173, 0.12);
+    color: #8e44ad;
+}
+
+.so-badge.holiday {
+    background: rgba(230, 126, 34, 0.12);
+    color: #d35400;
+}
+
 /* hint tooltip */
 .so-hint {
     position: relative;
@@ -407,6 +417,10 @@
     overflow: hidden;
 }
 
+.so-collapse-card.open {
+    overflow: visible;
+}
+
 .so-collapse-trigger {
     display: flex;
     align-items: center;
@@ -475,6 +489,7 @@
 
 .so-collapse.open {
     grid-template-rows: 1fr;
+    overflow: visible;
 }
 
 .so-collapse-inner {
@@ -486,6 +501,7 @@
 
 .so-collapse.open .so-collapse-inner {
     visibility: visible;
+    overflow: visible;
     transition-delay: 0s;
 }
 
@@ -494,6 +510,7 @@
     flex-direction: column;
     gap: 16px;
     padding: 20px;
+    min-height: 480px;
 }
 
 /* ---------- Notice ---------- */
@@ -522,6 +539,126 @@
 
 .so-notice strong {
     color: var(--c2);
+}
+
+/* ---------- Date Picker & Live Data Controls ---------- */
+.so-date-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    position: relative;
+    z-index: 50;
+}
+
+.so-calendar-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.so-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+}
+
+.so-badge-pill .so-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+
+.so-badge-pill.weekday {
+    border-color: rgba(63, 120, 166, 0.25);
+    background: rgba(63, 120, 166, 0.06);
+    color: var(--c2);
+}
+
+.so-badge-pill.weekday .so-badge-dot {
+    background: var(--c2);
+}
+
+.so-badge-pill.weekend {
+    border-color: rgba(31, 138, 112, 0.25);
+    background: rgba(31, 138, 112, 0.06);
+    color: var(--c);
+}
+
+.so-badge-pill.weekend .so-badge-dot {
+    background: var(--c);
+}
+
+.so-badge-pill.festival {
+    border-color: rgba(142, 68, 173, 0.28);
+    background: rgba(142, 68, 173, 0.08);
+    color: #8e44ad;
+    font-weight: 600;
+}
+
+.so-badge-pill.holiday {
+    border-color: rgba(230, 126, 34, 0.28);
+    background: rgba(230, 126, 34, 0.08);
+    color: #d35400;
+    font-weight: 600;
+}
+
+.so-badge-pill.standard {
+    border-color: var(--border);
+    background: var(--bg);
+    color: var(--text-secondary);
+}
+
+/* ---------- Table Placeholder (When no date selected) ---------- */
+.so-table-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 44px 24px;
+    min-height: 280px;
+    box-sizing: border-box;
+    flex: 1;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--muted);
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.so-table-placeholder svg {
+    color: var(--c);
+    opacity: 0.85;
+    margin-bottom: 2px;
+}
+
+.so-table-placeholder h4 {
+    margin: 0;
+    font-family: var(--font-display, sans-serif);
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.so-table-placeholder p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    max-width: 400px;
+    line-height: 1.5;
 }
 
 /* ---------- Editable table ---------- */
@@ -653,21 +790,70 @@
     font-weight: 500;
 }
 
-/* ---------- Actions + result ---------- */
-.so-actions {
+/* ---------- Predict Status Banner ---------- */
+.so-predict-status {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+    margin-bottom: 8px;
+}
+
+.so-predict-loading {
+    display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 10px 14px;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 9px;
+    background: rgba(31, 138, 112, 0.08);
+    border: 1px solid rgba(31, 138, 112, 0.22);
+    color: var(--c);
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 1px 4px rgba(31, 138, 112, 0.05);
 }
 
-.so-msg {
-    font-size: 11.5px;                    /* NEW: smaller */
-    color: var(--muted);
+.so-predict-loading .tdp-spinner {
+    width: 15px;
+    height: 15px;
+    border-width: 2px;
+    border-color: rgba(31, 138, 112, 0.25);
+    border-top-color: var(--c);
 }
 
-.so-msg.error {
+.so-predict-text strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.so-status-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 9px;
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
+.so-status-alert.error {
+    background: rgba(180, 65, 47, 0.08);
+    border: 1px solid rgba(180, 65, 47, 0.25);
     color: #b4412f;
+}
+
+.so-status-alert.info {
+    background: rgba(63, 120, 166, 0.08);
+    border: 1px solid rgba(63, 120, 166, 0.22);
+    color: var(--c2);
+}
+
+.so-alert-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: currentColor;
 }
 
 .so-result {
@@ -675,6 +861,20 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--bg);
+}
+
+.so-result-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.so-result-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .so-result-title {
